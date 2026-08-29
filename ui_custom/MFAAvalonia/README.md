@@ -8,7 +8,11 @@ gear beside `ChipDetailReadTask`. Runtime plan data stays in
 `config/chip_filter_plan.json`; build output and NuGet caches stay outside the
 repository on the E drive.
 
+The three lock-mode labels remain visible at all times. The current main skill
+is shown as a solid green button: click to select it and double-click to edit.
+The editor can copy its conditions to selected unconfigured skills, or clear
+only the active main-skill level after confirmation.
+
 Run `build.ps1` after cloning the matching upstream source into
 `E:\LAA\MFAAvalonia-src`. The script applies the patch when needed, builds the
 UI, and copies only `MFAAvalonia.Core.dll` into the local `gui/libs` directory.
-

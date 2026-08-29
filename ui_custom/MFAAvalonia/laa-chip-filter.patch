@@ -219,13 +219,14 @@ index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387
 +}
 diff --git a/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb2457273282d
+index 0000000000000000000000000000000000000000..ff59bde37f12216fc26e6bb846e85487165eff73
 --- /dev/null
 +++ b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
-@@ -0,0 +1,559 @@
+@@ -0,0 +1,723 @@
 +using Avalonia;
 +using Avalonia.Controls;
 +using Avalonia.Controls.Primitives;
++using Avalonia.Input;
 +using Avalonia.Layout;
 +using Avalonia.Media;
 +using MFAAvalonia.Helper;
@@ -245,15 +246,17 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +    private static readonly IBrush Configured = new SolidColorBrush(Color.Parse("#2D8A62"));
 +    private readonly Dictionary<int, Dictionary<string, ToggleButton>> _modeButtons = [];
 +    private readonly Dictionary<int, Button> _configureButtons = [];
++    private readonly Dictionary<string, Button> _skillButtons = [];
 +    private readonly TextBox _nameBox = new() { Watermark = "方案名称", MaxLength = 40 };
 +    private readonly TextBox _importBox = new() { Watermark = "在这里粘贴方案码" };
 +    private readonly TextBlock _conditionTitle = new() { FontSize = 18, FontWeight = FontWeight.SemiBold };
 +    private readonly TextBlock _progress = new();
 +    private readonly WrapPanel _skillPanel = new();
++    private readonly Button _copyButton = new();
 +    private readonly Border _conditionArea;
 +    private ChipFilterPlan _plan;
 +    private int _activeLevel = 2;
-+    private string? _lastConfiguredMainSkill;
++    private string _currentMainSkill = ChipFilterCatalog.MainSkills[0];
 +
 +    public ChipFilterPlanWindow()
 +    {
@@ -388,15 +391,25 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +
 +    private Border BuildConditionArea()
 +    {
-+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(0, 0, 0, 10) };
++        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Margin = new Thickness(0, 0, 0, 10) };
 +        header.Children.Add(_conditionTitle);
 +        _progress.VerticalAlignment = VerticalAlignment.Center;
 +        Grid.SetColumn(_progress, 1);
 +        header.Children.Add(_progress);
-+        var copy = new Button { Content = "复制当前配置到未配置词条", Margin = new Thickness(12, 0, 0, 0) };
-+        copy.Click += async (_, _) => await CopyToUnconfiguredAsync();
-+        Grid.SetColumn(copy, 2);
-+        header.Children.Add(copy);
++        _copyButton.Margin = new Thickness(12, 0, 0, 0);
++        _copyButton.Click += async (_, _) => await CopyToUnconfiguredAsync();
++        Grid.SetColumn(_copyButton, 2);
++        header.Children.Add(_copyButton);
++        var clear = new Button
++        {
++            Content = "清空当前配置",
++            Background = new SolidColorBrush(Color.Parse("#C74747")),
++            Foreground = Brushes.White,
++            Margin = new Thickness(10, 0, 0, 0)
++        };
++        clear.Click += async (_, _) => await ClearCurrentLevelAsync();
++        Grid.SetColumn(clear, 3);
++        header.Children.Add(clear);
 +
 +        var content = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
 +        content.Children.Add(header);
@@ -447,9 +460,18 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +        var current = _plan.Levels[level].Mode;
 +        foreach (var pair in _modeButtons[level])
 +        {
-+            pair.Value.IsChecked = pair.Key == current;
-+            pair.Value.Background = pair.Key == current ? Accent : Brushes.Transparent;
-+            pair.Value.Foreground = pair.Key == current ? Brushes.White : null;
++            var selected = pair.Key == current;
++            pair.Value.IsChecked = selected;
++            if (selected)
++            {
++                pair.Value.Background = Accent;
++                pair.Value.Foreground = Brushes.White;
++            }
++            else
++            {
++                pair.Value.ClearValue(TemplatedControl.BackgroundProperty);
++                pair.Value.ClearValue(TemplatedControl.ForegroundProperty);
++            }
 +        }
 +        _configureButtons[level].IsVisible = current == ChipLockModes.Conditional;
 +    }
@@ -469,19 +491,56 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +
 +        _conditionTitle.Text = $"主词条 {_activeLevel} 级：按类别配置副词条";
 +        _progress.Text = $"已配置 {rule.Conditions.Count}/{ChipFilterCatalog.MainSkills.Length}";
++        _copyButton.Content = $"复制“{_currentMainSkill}”配置到...";
 +        _skillPanel.Children.Clear();
++        _skillButtons.Clear();
 +        foreach (var main in ChipFilterCatalog.MainSkills)
 +        {
 +            var done = rule.Conditions.ContainsKey(main);
++            var current = main == _currentMainSkill;
 +            var button = new Button
 +            {
-+                Content = done ? $"{main}  已配置" : $"{main}  待配置",
++                Content = current ? $"{main}  当前词条" : done ? $"{main}  已配置" : $"{main}  待配置",
 +                MinWidth = 128,
 +                Margin = new Thickness(2),
-+                BorderBrush = done ? Configured : MutedBorder
++                BorderBrush = current || done ? Configured : MutedBorder
 +            };
-+            button.Click += async (_, _) => await ConfigureMainSkillAsync(main);
++            if (current)
++            {
++                button.Background = Configured;
++                button.Foreground = Brushes.White;
++            }
++            button.Click += (_, _) =>
++            {
++                _currentMainSkill = main;
++                UpdateCurrentSkillSelection();
++            };
++            button.DoubleTapped += async (_, _) => await ConfigureMainSkillAsync(main);
++            _skillButtons[main] = button;
 +            _skillPanel.Children.Add(button);
++        }
++    }
++
++    private void UpdateCurrentSkillSelection()
++    {
++        var rule = _plan.Levels[_activeLevel];
++        _copyButton.Content = $"复制“{_currentMainSkill}”配置到...";
++        foreach (var (main, button) in _skillButtons)
++        {
++            var current = main == _currentMainSkill;
++            var done = rule.Conditions.ContainsKey(main);
++            button.Content = current ? $"{main}  当前词条" : done ? $"{main}  已配置" : $"{main}  待配置";
++            button.BorderBrush = current || done ? Configured : MutedBorder;
++            if (current)
++            {
++                button.Background = Configured;
++                button.Foreground = Brushes.White;
++            }
++            else
++            {
++                button.ClearValue(TemplatedControl.BackgroundProperty);
++                button.ClearValue(TemplatedControl.ForegroundProperty);
++            }
 +        }
 +    }
 +
@@ -493,7 +552,7 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +        if (await wizard.ShowDialog<bool>(this))
 +        {
 +            levelRule.Conditions[main] = wizard.Result;
-+            _lastConfiguredMainSkill = main;
++            _currentMainSkill = main;
 +            RefreshConditionArea();
 +        }
 +    }
@@ -501,19 +560,41 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +    private async Task CopyToUnconfiguredAsync()
 +    {
 +        var rule = _plan.Levels[_activeLevel];
-+        if (_lastConfiguredMainSkill == null || !rule.Conditions.TryGetValue(_lastConfiguredMainSkill, out var source))
++        if (!rule.Conditions.TryGetValue(_currentMainSkill, out var source))
 +        {
-+            await NoticeWindow.ShowAsync(this, "请先完成一个主词条的副词条设置，再使用批量复制。");
++            await NoticeWindow.ShowAsync(this, $"当前词条“{_currentMainSkill}”尚未配置，请双击完成设置后再复制。");
 +            return;
 +        }
-+        var count = 0;
-+        foreach (var main in ChipFilterCatalog.MainSkills.Where(main => !rule.Conditions.ContainsKey(main)))
++        var unconfigured = ChipFilterCatalog.MainSkills.Where(main => !rule.Conditions.ContainsKey(main)).ToArray();
++        if (unconfigured.Length == 0)
 +        {
-+            rule.Conditions[main] = source.Clone();
-+            count++;
++            await NoticeWindow.ShowAsync(this, "当前等级没有未配置的主词条。");
++            return;
 +        }
++        var picker = new CopyTargetWindow(_currentMainSkill, unconfigured);
++        if (!await picker.ShowDialog<bool>(this))
++            return;
++        foreach (var main in picker.SelectedSkills)
++            rule.Conditions[main] = source.Clone();
 +        RefreshConditionArea();
-+        await NoticeWindow.ShowAsync(this, $"已将“{_lastConfiguredMainSkill}”的设置复制到 {count} 个未配置主词条。");
++        await NoticeWindow.ShowAsync(this, $"已将“{_currentMainSkill}”的设置复制到 {picker.SelectedSkills.Count} 个未配置主词条。");
++    }
++
++    private async Task ClearCurrentLevelAsync()
++    {
++        var rule = _plan.Levels[_activeLevel];
++        if (rule.Conditions.Count == 0)
++        {
++            await NoticeWindow.ShowAsync(this, $"主词条 {_activeLevel} 级目前没有条件锁定配置。");
++            return;
++        }
++        var confirmed = await ChoiceWindow.AskAsync(this,
++            $"确认清空主词条 {_activeLevel} 级的全部条件锁定配置？\n主词条 1、2、3 级中的其他等级不会受影响。", "确认清空", "取消");
++        if (!confirmed)
++            return;
++        rule.Conditions.Clear();
++        RefreshConditionArea();
++        await NoticeWindow.ShowAsync(this, $"已清空主词条 {_activeLevel} 级的条件锁定配置。");
 +    }
 +
 +    private async Task ImportAsync()
@@ -522,7 +603,7 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +        {
 +            _plan = ChipFilterPlanCodec.Decode(_importBox.Text ?? string.Empty);
 +            _importBox.Text = string.Empty;
-+            _lastConfiguredMainSkill = null;
++            _currentMainSkill = ChipFilterCatalog.MainSkills[0];
 +            LoadPlanIntoControls();
 +            await NoticeWindow.ShowAsync(this, "方案码导入成功，检查后点击“保存方案”即可使用。");
 +        }
@@ -667,6 +748,89 @@ index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb245
 +            MinimumLevels = _selected.ToDictionary(pair => pair.Key, pair => pair.Value.ToList())
 +        };
 +        Close(true);
++    }
++}
++
++internal sealed class CopyTargetWindow : SukiWindow
++{
++    private readonly List<CheckBox> _boxes = [];
++
++    public IReadOnlyList<string> SelectedSkills { get; private set; } = [];
++
++    public CopyTargetWindow(string source, IEnumerable<string> targets)
++    {
++        Title = "选择复制目标";
++        Width = 680;
++        Height = 520;
++        MinWidth = 600;
++        MinHeight = 440;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++
++        var choices = new WrapPanel();
++        foreach (var target in targets)
++        {
++            var box = new CheckBox { Content = target, Margin = new Thickness(6), MinWidth = 128 };
++            _boxes.Add(box);
++            choices.Children.Add(box);
++        }
++
++        var selectAll = new Button { Content = "全选" };
++        var clearAll = new Button { Content = "取消全选" };
++        var cancel = new Button { Content = "取消", MinWidth = 90 };
++        var confirm = new Button { Content = "确认复制", Classes = { "Primary" }, MinWidth = 100 };
++        selectAll.Click += (_, _) => _boxes.ForEach(box => box.IsChecked = true);
++        clearAll.Click += (_, _) => _boxes.ForEach(box => box.IsChecked = false);
++        cancel.Click += (_, _) => Close(false);
++        confirm.Click += async (_, _) =>
++        {
++            SelectedSkills = _boxes.Where(box => box.IsChecked == true)
++                .Select(box => box.Content?.ToString() ?? string.Empty)
++                .Where(value => value.Length > 0).ToArray();
++            if (SelectedSkills.Count == 0)
++            {
++                await NoticeWindow.ShowAsync(this, "请至少选择一个需要复制配置的主词条。");
++                return;
++            }
++            Close(true);
++        };
++
++        var toolbar = new StackPanel
++        {
++            Orientation = Orientation.Horizontal,
++            Spacing = 8,
++            Children = { selectAll, clearAll }
++        };
++        var footer = new StackPanel
++        {
++            Orientation = Orientation.Horizontal,
++            HorizontalAlignment = HorizontalAlignment.Right,
++            Spacing = 10,
++            Children = { cancel, confirm }
++        };
++        Content = new Grid
++        {
++            Margin = new Thickness(20),
++            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"),
++            Children =
++            {
++                new TextBlock
++                {
++                    Text = $"将“{source}”的副词条条件复制到选中的未配置词条",
++                    FontSize = 18,
++                    FontWeight = FontWeight.SemiBold,
++                    TextWrapping = TextWrapping.Wrap
++                },
++                new ContentControl { Content = toolbar, Margin = new Thickness(0, 12, 0, 8), [Grid.RowProperty] = 1 },
++                new ScrollViewer
++                {
++                    Content = choices,
++                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
++                    [Grid.RowProperty] = 2
++                },
++                new ContentControl { Content = footer, Margin = new Thickness(0, 14, 0, 0), [Grid.RowProperty] = 3 }
++            }
++        };
 +    }
 +}
 +
