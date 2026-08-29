@@ -12,7 +12,7 @@ from pathlib import Path
 
 from maa.custom_action import CustomAction
 
-from navigation import BACK_BUTTON, IDLE_MAIN_WAKE, is_idle_main_ui, is_main_ui
+from navigation import BACK_BUTTON, HOME_BUTTON, IDLE_MAIN_WAKE, is_idle_main_ui, is_main_ui
 from stop_guard import ActionStopped, ensure_running
 
 
@@ -223,6 +223,16 @@ class StartGameFlow(CustomAction):
         # adjacent, fixed bottom navigation controls instead.
         return is_main_ui(context, img)
 
+    @staticmethod
+    def _is_arena_list(context, img):
+        """Use two arena-only controls so popup colors cannot trigger refresh clicks."""
+        try:
+            title = context.run_recognition("ArenaPageTitle", img)
+            deploy = context.run_recognition("ArenaDeployButton", img)
+            return bool(title and title.hit and deploy and deploy.hit)
+        except Exception:
+            return False
+
     def run(self, context, argv) -> bool:
         try:
             return self._run(context, argv)
@@ -239,6 +249,7 @@ class StartGameFlow(CustomAction):
         last_start_click = 0.0
         start_clicks = 0
         start_screen_hits = 0
+        arena_home_clicks = 0
         handled = set()
 
         while time.time() < deadline:
@@ -248,6 +259,24 @@ class StartGameFlow(CustomAction):
             if is_idle_main_ui(context, img):
                 self._click(context, IDLE_MAIN_WAKE, "主界面待机画面空白处")
                 time.sleep(1.0)
+                continue
+
+            # Completion checks must precede popup color heuristics. The arena
+            # refresh area previously looked like the notice close button.
+            if self._is_main(context, img):
+                done = ", ".join(sorted(handled)) or "无"
+                log.info("已到主界面；已处理开屏项目：%s", done)
+                return True
+
+            if self._is_arena_list(context, img):
+                if arena_home_clicks >= 3:
+                    log.warning("竞技场内连续3次点击主界面键仍未返回，停止开始游戏任务")
+                    return False
+                self._click(context, HOME_BUTTON, "竞技场内主界面键")
+                handled.add("return_home_from_arena")
+                arena_home_clicks += 1
+                last_action = time.time()
+                time.sleep(1.2)
                 continue
 
             is_start_screen = self._is_start_screen(context, img)
@@ -299,11 +328,6 @@ class StartGameFlow(CustomAction):
                 start_screen_hits = 0
                 time.sleep(1.0)
                 continue
-
-            if self._is_main(context, img):
-                done = ", ".join(sorted(handled)) or "无"
-                log.info("已到主界面；已处理开屏项目：%s", done)
-                return True
 
             time.sleep(0.45)
 

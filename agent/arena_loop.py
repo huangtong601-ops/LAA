@@ -41,6 +41,12 @@ STRAT_HIGH    = "尽量刷取高分"
 STRAT_COMPLETE= "尽量完成挑战"
 REPEAT_ZERO   = "重复挑战直到次数归零"
 REPEAT_CUSTOM = "自定次数"
+ACTION_CHALLENGE = "challenge"
+ACTION_REFRESH = "refresh"
+ACTION_RETRY_COUNTER = "retry_counter"
+ACTION_STOP_SIM_EMPTY = "stop_sim_empty"
+ACTION_STOP_REFRESH_EMPTY = "stop_refresh_empty"
+ACTION_STOP_CUSTOM_TARGET = "stop_custom_target"
 TOP_ARENA_ROW = {"name": "顶部第一位", "points_roi": [1693, 211, 164, 70], "power_roi": ROI_OPP, "select": BTN_TOP_CHALLENGE}
 INSTANCE_CONFIG = Path(r"E:\LAA\MaaBoilerplate\gui\config\instances\default.json")
 PERSISTED_SETTINGS = Path(r"E:\LAA\MaaBoilerplate\config\arena_settings.json")
@@ -56,6 +62,24 @@ def candidate_meets_requirements(own, opponent, points, allowed_gap, strategy):
     power_ok = not should_refresh_for_power(own, opponent, allowed_gap)
     points_ok = points is None or points >= (28 if strategy == STRAT_HIGH else 26)
     return power_ok and points_ok
+
+
+def decide_arena_action(simulations, refreshes, candidate_ok, repeat, challenged, target):
+    """Return the only allowed normal transition for the current arena state."""
+    if simulations is None:
+        return ACTION_RETRY_COUNTER
+    if simulations == 0:
+        return ACTION_STOP_SIM_EMPTY
+    if repeat == REPEAT_CUSTOM and challenged >= target:
+        return ACTION_STOP_CUSTOM_TARGET
+    if candidate_ok:
+        return ACTION_CHALLENGE
+    if refreshes is None:
+        return ACTION_RETRY_COUNTER
+    if refreshes == 0:
+        return ACTION_STOP_REFRESH_EMPTY
+    return ACTION_REFRESH
+
 
 class ArenaLoop(CustomAction):
     @staticmethod
@@ -204,6 +228,17 @@ class ArenaLoop(CustomAction):
         except Exception as exc:
             log.warning("读取计数器%s失败：%s", node, exc)
             return None
+
+    def _confirm_zero_counter(self, ctx, node, roi, max_value, label):
+        """Require two zero OCR readings before a counter may end the task."""
+        if not self._sleep(ctx, 0.18):
+            return False
+        value = self._counter_current(ctx, self._shot(ctx), node, roi, max_value)
+        if value == 0:
+            log.info("%s已连续两次识别为0，确认归零", label)
+            return True
+        log.info("%s的0读数未通过复核（复核=%s），继续任务", label, value)
+        return False
 
     def _stable_num(self, ctx, node, roi, label, min_value, max_value, attempts=4, first_img=None):
         readings = []
@@ -543,9 +578,22 @@ class ArenaLoop(CustomAction):
                 img = self._shot(context)
                 refresh_cur = self._counter_current(context, img, "ArenaReadRefresh", ROI_REFRESH, 15)
                 sim_cur = self._counter_current(context, img, "ArenaReadChallenges", ROI_SIM, 10)
+                if sim_cur is None:
+                    log.warning("模拟次数暂时无法识别，本轮不刷新、不挑战也不结束，重新读取")
+                    if not self._sleep(context, 0.35):
+                        break
+                    continue
                 if sim_cur == 0:
-                    log.info("模拟次数归零，停止挑战")
-                    break
+                    if self._confirm_zero_counter(
+                        context, "ArenaReadChallenges", ROI_SIM, 10, "模拟次数"
+                    ):
+                        log.info("模拟次数归零，停止挑战")
+                        break
+                    continue
+                if refresh_cur == 0 and not self._confirm_zero_counter(
+                    context, "ArenaReadRefresh", ROI_REFRESH, 15, "刷新次数"
+                ):
+                    continue
 
                 top = self._read_top_row(context, img)
                 opp = top["power"]
@@ -555,26 +603,35 @@ class ArenaLoop(CustomAction):
                     top["name"], opp, pts, refresh_cur, sim_cur,
                 )
 
-                if opp is None:
-                    if refresh_cur == 0:
-                        remaining = sim_cur if sim_cur is not None else "未知"
-                        log.info("刷新次数归零，剩余挑战次数（%s）次", remaining)
-                        break
-                    log.warning("无法稳定识别顶部对手战力，中止竞技场，禁止盲目挑战")
-                    return False
                 if pts is None:
-                    log.info("GUI未读到顶部积分，按固定策略直接挑战顶部第一行")
+                    log.info("GUI未读到顶部积分，本轮仅按战力条件判断")
 
-                enemy_advantage = opp - own
-                pts_ok = pts is None or pts >= (28 if strat == STRAT_HIGH else 26)
-                power_ok = not should_refresh_for_power(own, opp, power_gap)
+                enemy_advantage = opp - own if opp is not None else None
+                power_ok = opp is not None and not should_refresh_for_power(own, opp, power_gap)
                 candidate_ok = candidate_meets_requirements(own, opp, pts, power_gap, strat)
-                if not candidate_ok:
-                    if refresh_cur == 0:
-                        remaining = sim_cur if sim_cur is not None else "未知"
-                        log.info("刷新次数归零，剩余挑战次数（%s）次", remaining)
+                decision = decide_arena_action(
+                    sim_cur, refresh_cur, candidate_ok, repeat, challenged, target
+                )
+
+                if decision == ACTION_STOP_SIM_EMPTY:
+                    log.info("模拟次数归零，停止挑战")
+                    break
+                if decision == ACTION_STOP_CUSTOM_TARGET:
+                    log.info("已达目标次数(%s)，停止挑战", target)
+                    break
+                if decision == ACTION_RETRY_COUNTER:
+                    log.warning("刷新次数暂时无法识别且当前对手不符合要求，本轮不执行操作，重新读取")
+                    if not self._sleep(context, 0.35):
                         break
-                    if not power_ok:
+                    continue
+                if decision == ACTION_STOP_REFRESH_EMPTY:
+                    remaining = sim_cur if sim_cur is not None else "未知"
+                    log.info("刷新次数归零，当前对手不符合挑战要求，剩余挑战次数（%s）次", remaining)
+                    break
+                if decision == ACTION_REFRESH:
+                    if opp is None:
+                        log.info("顶部对手战力无法稳定识别，尚有刷新次数，点击刷新")
+                    elif not power_ok:
                         log.info(
                             "顶部对手战力过高（己方=%s 敌方=%s 高出=%s 阈值=%s），点击刷新",
                             own, opp, enemy_advantage, power_gap,
@@ -603,9 +660,6 @@ class ArenaLoop(CustomAction):
                     return False
                 challenged += 1
                 log.info("已挑战=%s 剩余模拟=%s 对方战力=%s 挑战%s", challenged, sim_cur, opp, "成功/已提交" if success else "失败/未知")
-                if repeat == REPEAT_CUSTOM and challenged >= target:
-                    log.info("已达目标次数(%s)，停止挑战", target)
-                    break
         except ActionStopped:
             log.info("检测到MFA停止状态，竞技场立即停止且不再执行点击")
 
