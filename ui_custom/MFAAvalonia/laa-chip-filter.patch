@@ -219,10 +219,10 @@ index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387
 +}
 diff --git a/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..ff59bde37f12216fc26e6bb846e85487165eff73
+index 0000000000000000000000000000000000000000..066bfbf117abbd3d7f769b5937c1068d7a5863eb
 --- /dev/null
 +++ b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
-@@ -0,0 +1,723 @@
+@@ -0,0 +1,725 @@
 +using Avalonia;
 +using Avalonia.Controls;
 +using Avalonia.Controls.Primitives;
@@ -503,7 +503,8 @@ index 0000000000000000000000000000000000000000..ff59bde37f12216fc26e6bb846e85487
 +                Content = current ? $"{main}  当前词条" : done ? $"{main}  已配置" : $"{main}  待配置",
 +                MinWidth = 128,
 +                Margin = new Thickness(2),
-+                BorderBrush = current || done ? Configured : MutedBorder
++                BorderBrush = current || done ? Configured : MutedBorder,
++                BorderThickness = new Thickness(current ? 3 : done ? 2 : 1)
 +            };
 +            if (current)
 +            {
@@ -531,6 +532,7 @@ index 0000000000000000000000000000000000000000..ff59bde37f12216fc26e6bb846e85487
 +            var done = rule.Conditions.ContainsKey(main);
 +            button.Content = current ? $"{main}  当前词条" : done ? $"{main}  已配置" : $"{main}  待配置";
 +            button.BorderBrush = current || done ? Configured : MutedBorder;
++            button.BorderThickness = new Thickness(current ? 3 : done ? 2 : 1);
 +            if (current)
 +            {
 +                button.Background = Configured;
