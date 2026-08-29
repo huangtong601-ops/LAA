@@ -289,7 +289,7 @@ class ArenaLoop(CustomAction):
         return True
 
     def _wait_battle_result(self, ctx):
-        """Advance victory and reward pages as soon as their key regions appear."""
+        """Finish only after settlement evidence and a verified return to the list."""
         deadline = time.time() + 55
         victory_seen = False
         reward_seen = False
@@ -298,7 +298,10 @@ class ArenaLoop(CustomAction):
             if self._cancelled(ctx):
                 return False
             img = self._shot(ctx)
-            if self._is_reward_page(ctx, img):
+            if (victory_seen or reward_seen) and self._is_arena_list(ctx, img):
+                log.info("竞技场奖励处理完成，已确认返回对手列表")
+                return True
+            if self._is_reward_page(ctx, img, allow_color_fallback=victory_seen):
                 log.info("识别到竞技场获得物品页面，点击空白处返回列表")
                 self._click(ctx, *BLANK_CLOSE)
                 reward_seen = True
@@ -313,30 +316,34 @@ class ArenaLoop(CustomAction):
                 if not self._sleep(ctx, 0.6):
                     return False
                 continue
-            no_reward_grace_elapsed = (
-                victory_clicked_at is not None and time.time() - victory_clicked_at >= 5.0
-            )
-            if (reward_seen or (victory_seen and no_reward_grace_elapsed)) and self._at_arena(ctx):
-                log.info("竞技场奖励处理完成，已返回对手列表")
-                return True
+            # 结算点击后若页面跳得过快，空白坐标可能落到对手卡片并重新打开准备页。
+            # 这种情况只返回一次列表，不把准备页上的数字当作剩余次数。
+            if (victory_seen or reward_seen) and self._is_challenge_confirm(ctx, img):
+                log.warning("结算后误进入挑战准备页，返回竞技场列表后再继续")
+                self._click(ctx, *BTN_BACK)
+                if not self._sleep(ctx, 0.8):
+                    return False
+                continue
+            no_reward_grace_elapsed = victory_clicked_at is not None and time.time() - victory_clicked_at >= 5.0
+            if victory_seen and no_reward_grace_elapsed:
+                log.debug("胜利页已处理，继续等待奖励页或竞技场列表的明确特征")
             if not self._sleep(ctx, 0.35):
                 return False
         log.warning("竞技场战斗/奖励页面等待超时")
         return False
 
-    def _is_reward_page(self, ctx, img):
+    def _is_reward_page(self, ctx, img, allow_color_fallback=False):
         if self._soft_hit(ctx, NODE_REWARD, img):
             return True
+        if not allow_color_fallback:
+            return False
         title_white = self._color_ratio(img, [760, 235, 420, 125], "white")
         modal_dark = self._color_ratio(img, [650, 210, 650, 620], "black")
         return title_white > 0.075 and modal_dark > 0.60
 
     def _is_victory_page(self, ctx, img):
-        if self._soft_hit(ctx, NODE_RESULT, img):
-            return True
-        title_white = self._color_ratio(img, [20, 35, 580, 185], "white")
-        title_dark = self._color_ratio(img, [20, 35, 580, 185], "black")
-        return title_white > 0.12 and title_dark > 0.40
+        # “战斗胜利”OCR在实机日志中置信度接近1；仅凭大块明暗比例会把战斗HUD误判为胜利页。
+        return self._soft_hit(ctx, NODE_RESULT, img)
 
     def _dismiss_post_battle_overlay(self, ctx):
         """Recover when a previous run was stopped on victory/reward pages."""
@@ -389,8 +396,7 @@ class ArenaLoop(CustomAction):
             log.warning("color ratio fail: %s", e)
             return 0.0
 
-    def _at_arena(self, ctx):
-        img = self._shot(ctx)
+    def _is_arena_list(self, ctx, img):
         if self._is_reward_page(ctx, img) or self._is_victory_page(ctx, img):
             return False
         page_title = self._soft_hit(ctx, "ArenaPageTitle", img)
@@ -407,10 +413,12 @@ class ArenaLoop(CustomAction):
         # 只用列表页特有的刷新区域判断，避免把挑战确认页的橙色“挑战”按钮误判成竞技场列表。
         if self._soft_hit(ctx, "ArenaRefresh", img, roi=[1720, 95, 170, 110], threshold=0.45):
             return True
-        return self._counter_current(ctx, img, "ArenaReadRefresh", ROI_REFRESH, 15) is not None
+        return False
 
-    def _at_challenge_confirm(self, ctx):
-        img = self._shot(ctx)
+    def _at_arena(self, ctx):
+        return self._is_arena_list(ctx, self._shot(ctx))
+
+    def _is_challenge_confirm(self, ctx, img):
         btn_orange = self._color_ratio(img, ROI_CONFIRM_BUTTON, "orange")
         vs_white = self._color_ratio(img, ROI_CONFIRM_VS, "white")
         if btn_orange > 0.20 and vs_white > 0.12:
@@ -421,6 +429,9 @@ class ArenaLoop(CustomAction):
         button_text = self._text(ctx, img, "ArenaReadPoints", [1120, 910, 300, 130])
         reward_text = self._text(ctx, img, "ArenaReadPoints", [820, 760, 320, 140])
         return "挑战" in button_text or "胜利" in reward_text or "积分" in reward_text
+
+    def _at_challenge_confirm(self, ctx):
+        return self._is_challenge_confirm(ctx, self._shot(ctx))
 
     def _maybe_start_from_login(self, ctx):
         if self._at_challenge_confirm(ctx):
@@ -527,8 +538,17 @@ class ArenaLoop(CustomAction):
         time.sleep(1.0)
 
     def _click_confirm_challenge(self, ctx):
-        log.info("点击二级挑战按钮标注坐标(%d,%d)", *BTN_CONFIRM_CHALLENGE)
-        self._click(ctx, *BTN_CONFIRM_CHALLENGE)
+        for attempt in range(1, 4):
+            log.info("点击二级挑战按钮标注坐标(%d,%d)，第%s次", *BTN_CONFIRM_CHALLENGE, attempt)
+            self._click(ctx, *BTN_CONFIRM_CHALLENGE)
+            if not self._sleep(ctx, 1.0):
+                return False
+            if not self._at_challenge_confirm(ctx):
+                log.info("挑战准备页已离开，确认挑战指令生效")
+                return True
+            log.warning("挑战按钮第%s次点击被吞，仍在准备页", attempt)
+        log.warning("连续三次点击后仍在挑战准备页，中止本轮且不计为已挑战")
+        return False
 
     def _back_to_arena_from_confirm(self, ctx):
         log.info("当前在挑战确认页，先返回竞技场列表，避免沿用错误对手")
@@ -576,6 +596,15 @@ class ArenaLoop(CustomAction):
             while time.time() < deadline:
                 ensure_running(context)
                 img = self._shot(context)
+                if not self._is_arena_list(context, img):
+                    if self._is_challenge_confirm(context, img):
+                        log.warning("读取次数前发现仍在挑战准备页，返回列表恢复状态")
+                        self._click(context, *BTN_BACK)
+                        if not self._sleep(context, 0.8):
+                            break
+                        continue
+                    log.warning("当前不是竞技场对手列表，禁止读取次数并结束任务")
+                    return False
                 refresh_cur = self._counter_current(context, img, "ArenaReadRefresh", ROI_REFRESH, 15)
                 sim_cur = self._counter_current(context, img, "ArenaReadChallenges", ROI_SIM, 10)
                 if sim_cur is None:
@@ -652,7 +681,8 @@ class ArenaLoop(CustomAction):
                 self._select_row_and_attack(context, top)
                 if not self._sleep(context, 0.4):
                     break
-                self._click_confirm_challenge(context)
+                if not self._click_confirm_challenge(context):
+                    return False
                 log.info("等待胜利与奖励关键页面，不再固定等待26秒")
                 success = self._wait_battle_result(context)
                 ensure_running(context)

@@ -16,6 +16,7 @@ from arena_loop import (  # noqa: E402
     ACTION_STOP_SIM_EMPTY,
     REPEAT_CUSTOM,
     REPEAT_ZERO,
+    ArenaLoop,
     decide_arena_action,
 )
 from startgame_flow import StartGameFlow  # noqa: E402
@@ -30,7 +31,7 @@ class _RecognitionContext:
     def __init__(self, hits):
         self.hits = hits
 
-    def run_recognition(self, name, _image):
+    def run_recognition(self, name, _image, pipeline_override=None):
         return _Hit(self.hits.get(name, False))
 
 
@@ -71,7 +72,13 @@ def main():
     partial = _RecognitionContext({"ArenaPageTitle": True, "ArenaDeployButton": False})
     assert StartGameFlow._is_arena_list(arena, object()) is True
     assert StartGameFlow._is_arena_list(partial, object()) is False
-    print("ARENA_LOGIC_OK (10 tests)")
+    loop = ArenaLoop()
+    assert loop._is_arena_list(arena, object()) is True
+    counter_only = _RecognitionContext({"ArenaReadRefresh": True})
+    assert loop._is_arena_list(counter_only, object()) is False
+    confirm = _RecognitionContext({"ConfirmStart": True})
+    assert loop._is_arena_list(confirm, object()) is False
+    print("ARENA_LOGIC_OK (13 tests)")
 
 
 if __name__ == "__main__":
