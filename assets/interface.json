@@ -1,108 +1,157 @@
 {
-    // 本文件主要定义了通用 UI 的行为和显示内容
-    // 可参考文档和示例添加更多您需要的功能
-    // 文档：https://maafw.xyz/docs/3.3-ProjectInterfaceV2
-    // 示例：https://github.com/MaaXYZ/MaaFramework/blob/main/sample/interface.json
     "interface_version": 2,
-    "name": "MaaXXX",
-    "description": "这是一个使用 MaaFramework 创建的新项目。",
-    "contact": "QQ群: 123456789",
+    "name": "洛AA",
+    "icon": "./icon.png",
+    "description": "基于 MaaFramework 的交错战线自动化脚本（LAA / MuMu12 / ADB）。",
     "license": "MIT",
-    "welcome": "首次使用！欢迎使用 MAA!",
-    // 填写项目地址和版本号可实现自动更新功能
-    "github": "https://github.com/MaaXYZ/MaaPracticeBoilerplate",
-    "version": "1.0.0",
-    // Mirror酱为第三方分发服务，新项目默认关闭
-    // 若有需要请联系 Mirror酱 开通，直接自行开启是无法使用的
-    // "mirrorchyan_rid": "MaaXXX",
-    // "mirrorchyan_multiplatform": true,
+    "version": "0.1.0",
+    "pretask": {
+        "name": "确保模拟器运行",
+        "label": "开始游戏任务启动环境",
+        "description": "仅选择“开始游戏”任务时拉起 MuMu 模拟器12并打开交错战线。",
+        "exec": "E:\\LAA\\MaaBoilerplate\\.venv\\Scripts\\python.exe",
+        "args": ["E:\\LAA\\MaaBoilerplate\\tools\\ensure_emu.py"]
+    },
     "controller": [
         {
-            "name": "安卓端",
+            "name": "MuMu12-交错战线",
             "type": "Adb",
-            "display_short_side": 720 // 默认缩放分辨率的短边长度
-        },
-        {
-            "name": "桌面端",
-            "type": "Win32",
-            "win32": {
-                "class_regex": ".*",
-                "window_regex": "Visual Studio",
-                // 截图及控制方式，请根据项目实际情况修改
-                // 文档: https://maafw.xyz/docs/2.4-ControlMethods
-                "screencap": "PrintWindow", // 截图方式
-                "mouse": "PostMessageWithCursorPos", // 鼠标控制方式
-                "keyboard": "PostMessageWithCursorPos" // 键盘控制方式
+            "display_raw": true,
+            "adb": {
+                "adb_path": "E:\\MuMuPlayer-12.0\\shell\\adb.exe",
+                "adb_address": "127.0.0.1:16416",
+                "config": {
+                    "extras": {
+                        "mumu": { "enable": true, "index": 1, "path": "E:/MuMuPlayer-12.0" }
+                    }
+                }
             }
         }
     ],
     "resource": [
-        {
-            "name": "官服",
-            "path": [
-                "./resource"
-            ]
-        },
-        {
-            "name": "B 服",
-            "path": [
-                "./resource"
-                // "./resource_bilibili"
-            ]
-        }
+        { "name": "官服", "path": ["./resource"] }
     ],
-    // 可选的 agent 示例
-    // "agent": {
-    //     "child_exec": "python",
-    //     "child_args": [
-    //         "./agent/main.py"
-    //     ]
-    // },
+    "agent": {
+        "child_exec": "E:\\LAA\\MaaBoilerplate\\.venv\\Scripts\\python.exe",
+        "child_args": ["E:\\LAA\\MaaBoilerplate\\agent\\main.py"]
+    },
     "task": [
-        {
-            "name": "普通任务",
-            "entry": "MyTask1"
-        },
-        {
-            "name": "选项任务",
-            "entry": "MyTask2",
-            "option": [
-                "任务选项1"
-            ]
-        },
-        {
-            "name": "参数任务",
-            "entry": "MyTask3",
-            "option": [
-                "任务选项1"
-            ],
-            "pipeline_override": {}
-        },
-        {
-            "name": "带Custom的任务",
-            "entry": "MyTask4"
-        }
+        { "name": "开始游戏", "entry": "StartGameTask", "repeatable": false },
+        { "name": "竞技场", "entry": "ArenaTask", "repeatable": false, "option": ["刷取策略", "战力差时依然挑战", "重复挑战方式"] },
+        { "name": "周本·重复刷取", "entry": "WeeklyTask", "repeatable": true, "repeat_count": 5, "option": ["本周报酬全部领取后结束"] },
+        { "name": "活动·自动挑战下一关", "entry": "EventTask", "repeatable": true, "repeat_count": -1 },
+        { "name": "基建·自动换班", "entry": "BaseShiftTask", "repeatable": true, "repeat_count": 1 },
+        { "name": "基建·自动收菜", "entry": "BaseCollectTask", "repeatable": true, "repeat_count": 1 },
+        { "name": "基建-订单库", "entry": "BaseExchangeTask", "repeatable": false, "option": ["默认兑换构建票订单数额", "构建票订单数额6-10", "构建票订单数额16-18", "兑换稀有星币订单", "兑换稀有技术点订单"] }
     ],
     "option": {
-        "任务选项1": {
-            "type": "select",
+        "本周报酬全部领取后结束": {
+            "type": "switch",
+            "label": "本周报酬全部领取后结束",
+            "default_case": "Yes",
             "cases": [
+                { "name": "Yes" },
+                { "name": "No" }
+            ]
+        },
+        "重复挑战方式": {
+            "type": "select",
+            "label": "重复挑战方式",
+            "default_case": "自定次数",
+            "cases": [
+                { "name": "自定次数", "option": ["自定次数"] },
+                { "name": "重复挑战直到次数归零" }
+            ]
+        },
+        "自定次数": {
+            "type": "select",
+            "label": "挑战次数",
+            "default_case": "1",
+            "cases": [
+                { "name": "1" }, { "name": "2" }, { "name": "3" }, { "name": "4" }, { "name": "5" },
+                { "name": "6" }, { "name": "7" }, { "name": "8" }, { "name": "9" }, { "name": "10" }
+            ]
+        },
+        "刷取策略": {
+            "type": "select",
+            "label": "刷取策略",
+            "default_case": "尽量刷取高分",
+            "cases": [
+                { "name": "尽量刷取高分" },
+                { "name": "尽量完成挑战" }
+            ]
+        },
+        "战力差时依然挑战": {
+            "type": "input",
+            "label": "战力差时依然挑战",
+            "inputs": [
                 {
-                    "name": "文本1",
-                    "pipeline_override": {
-                        "OcrTask": {
-                            "text": "文本1"
-                        }
-                    }
-                },
-                {
-                    "name": "文本2",
-                    "pipeline_override": {
-                        "OcrTask": {
-                            "text": "文本2"
-                        }
-                    }
+                    "name": "战力差",
+                    "label": "战力差（仅我方较低时）",
+                    "default": "10000",
+                    "pipeline_type": "int",
+                    "verify": "^[0-9]+$",
+                    "pattern_msg": "请输入大于或等于 0 的整数"
                 }
+            ]
+        },
+        "默认兑换构建票订单数额": {
+            "type": "checkbox",
+            "label": "默认兑换构建票订单数额",
+            "default_case": [],
+            "cases": [
+                { "name": "缺少素材时自动合成" }
+            ]
+        },
+        "构建票订单数额6-10": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": ["6", "8"],
+            "cases": [
+                { "name": "6" },
+                { "name": "8" },
+                { "name": "10" }
+            ]
+        },
+        "构建票订单数额16-18": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": ["16"],
+            "cases": [
+                { "name": "16" },
+                { "name": "18" }
+            ]
+        },
+        "兑换稀有星币订单": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": [],
+            "cases": [
+                { "name": "兑换稀有星币订单", "option": ["稀有星币订单缺少素材时自动合成"] }
+            ]
+        },
+        "稀有星币订单缺少素材时自动合成": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": [],
+            "cases": [
+                { "name": "缺少素材时自动合成" }
+            ]
+        },
+        "兑换稀有技术点订单": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": [],
+            "cases": [
+                { "name": "兑换稀有技术点订单", "option": ["稀有技术点订单缺少素材时自动合成"] }
+            ]
+        },
+        "稀有技术点订单缺少素材时自动合成": {
+            "type": "checkbox",
+            "label": "",
+            "default_case": [],
+            "cases": [
+                { "name": "缺少素材时自动合成" }
             ]
         }
     }

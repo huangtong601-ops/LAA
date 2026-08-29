@@ -1,0 +1,294 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>洛AA · 操作录制管理器</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Microsoft YaHei",system-ui,Arial;background:#1b1f27;color:#e6e6e6;height:100vh;display:flex;flex-direction:column}
+  header{padding:10px 16px;background:#232a36;border-bottom:1px solid #38404f;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;font-weight:600}
+  .btn{border:0;border-radius:6px;padding:8px 16px;font-size:14px;cursor:pointer;color:#fff}
+  .btn-green{background:#2e9e5b}.btn-green:hover{background:#36b569}
+  .btn-red{background:#c0392b}.btn-red:hover{background:#d64535}
+  .btn-gray{background:#4a5263}.btn-gray:hover{background:#5a6377}
+  input[type=text]{background:#12161d;border:1px solid #38404f;color:#eee;border-radius:6px;padding:7px 10px;font-size:14px}
+  #status{font-size:13px;color:#9fb3c8}
+  #savedNote{font-size:12px;color:#36b569;margin-left:auto}
+  main{flex:1;display:flex;min-height:0}
+  #left{width:390px;min-width:300px;border-right:1px solid #38404f;display:flex;flex-direction:column;padding:12px;gap:10px;overflow:auto}
+  #thumbs,#deletedThumbs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow:visible}
+  .thumb{position:relative;border:2px solid transparent;border-radius:6px;cursor:pointer;overflow:hidden;background:#000}
+  .thumb img{width:100%;height:auto;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none}
+  .thumb.sel{border-color:#2e9e5b}
+  .thumb.picked{outline:3px solid #4aa3df;outline-offset:-3px}
+  .thumb.deleted{opacity:.48}
+  .thumb .number{position:absolute;left:4px;top:4px;background:rgba(15,19,26,.9);color:#fff;font-size:12px;font-weight:700;padding:3px 7px;border-radius:4px;font-variant-numeric:tabular-nums}
+  .thumb .badge{position:absolute;left:4px;top:31px;background:rgba(0,0,0,.68);font-size:11px;padding:2px 5px;border-radius:4px;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .thumb .sp{position:absolute;right:34px;top:4px;background:#e67e22;color:#222;font-size:10px;padding:1px 4px;border-radius:4px}
+  .thumbAction{position:absolute;right:4px;top:4px;width:25px;height:25px;border:0;border-radius:4px;background:rgba(192,57,43,.94);color:#fff;font-size:20px;line-height:22px;cursor:pointer;opacity:0;transition:opacity .12s}
+  .thumb:hover .thumbAction,.thumbAction:focus{opacity:1}
+  .thumbAction.restore{background:rgba(46,158,91,.95)}
+  #deletedSection{border-top:1px solid #38404f;padding-top:8px}
+  #deletedSection summary{cursor:pointer;color:#9fb3c8;font-size:13px;margin-bottom:8px}
+  #right{flex:1;display:flex;flex-direction:column;padding:12px;min-width:0}
+  #viewer{flex:1;position:relative;overflow:auto;background:#0c0e12;display:flex;align-items:center;justify-content:center;padding:12px}
+  #wrap{position:relative;display:none}
+  #wrap img{display:block;user-select:none}
+  #canvas{position:absolute;left:0;top:0;cursor:crosshair}
+  #panel{display:none;margin-top:10px;background:#232a36;border:1px solid #38404f;border-radius:8px;padding:10px;gap:8px;flex-wrap:wrap;align-items:center}
+  #panel input{flex:1}
+  .regionList{margin-top:6px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto}
+  .region{border:1px solid #38404f;border-radius:6px;padding:5px 8px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer}
+  .region:hover{border-color:#f5c542;background:#2a303b}
+  .region b{color:#f5c542}
+  .region .note{color:#9fb3c8;flex:1}
+  .help{font-size:12px;color:#7c879b;line-height:1.6}
+  .sectionHead{display:flex;align-items:center;gap:6px;border-top:1px solid #38404f;padding-top:9px}
+  .sectionHead b{font-size:13px}.sectionHead span{font-size:12px;color:#9fb3c8;margin-right:auto}
+  .btn-small{padding:4px 9px;font-size:12px}
+  #operations{display:flex;flex-direction:column;gap:5px;min-height:80px;max-height:32vh;overflow:auto}
+  .operation{display:grid;grid-template-columns:20px 1fr;gap:6px;align-items:start;border-left:3px solid #4a5263;background:#161b23;padding:6px 8px;font-size:12px}
+  .operation.swipe{border-left-color:#4aa3df}.operation.tap{border-left-color:#36b569}.operation.long_press{border-left-color:#e6a23c}
+  .operation.ignored{opacity:.42;text-decoration:line-through}
+  .operation .opMain{color:#e6e6e6}.operation .opMeta{color:#8995a8;margin-top:2px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header>
+  <h1>洛AA · 操作录制管理器</h1>
+  <select id="sessionSel" title="选择会话(标注名)" style="background:#12161d;border:1px solid #38404f;color:#eee;border-radius:6px;padding:7px 10px;font-size:14px;max-width:300px"></select>
+  <input id="label" type="text" size="26" placeholder="操作名，如：主界面→竞技场">
+  <button class="btn btn-green" id="btnStart">开始录制</button>
+  <button class="btn btn-red" id="btnStop">停止录制</button>
+  <span id="status">未开始</span>
+  <span id="savedNote"></span>
+</header>
+<main>
+  <div id="left">
+    <div class="help">录制器会在页面变化及每次点击/滑动后自动截图。点缩略图看大图；拖动框选“需特殊处理”区域，<b>框选即自动保存</b>。点击已保存的黄色区域或下方说明可再次修改。停止录制后可在操作时间线中忽略或恢复误操作。</div>
+    <div id="thumbs"></div>
+    <details id="deletedSection">
+      <summary>已删除图片（<span id="deletedCount">0</span>）</summary>
+      <div id="deletedThumbs"></div>
+    </details>
+    <div class="sectionHead">
+      <b>操作时间线</b><span id="operationCount">0 条</span>
+      <button class="btn btn-gray btn-small" id="btnIgnore">忽略所选</button>
+      <button class="btn btn-gray btn-small" id="btnRestore">恢复所选</button>
+    </div>
+    <div id="operations"></div>
+  </div>
+  <div id="right">
+    <div id="viewer"><div id="wrap"><img id="big" alt=""><canvas id="canvas"></canvas></div></div>
+    <div id="panel">
+      <input id="fileLabel" type="text" placeholder="该截图所处位置/说明（如：竞技场主界面）">
+      <button class="btn btn-gray" id="btnSave">手动保存</button>
+      <div class="regionList" id="regionList"></div>
+      <div id="regionHint" style="font-size:12px;color:#7c879b"></div>
+    </div>
+  </div>
+</main>
+<script>
+let screens=[], deletedScreens=[], operations=[], annotations={}, curFile=null, regions=[], drawing=false, sx=0,sy=0, sessionId=null, running=false, saveTimer=null;
+const selectedOperations=new Set();
+const selectedScreens=new Set();
+const deleteUndoStack=[];
+let dragSelecting=false, dragMoved=false, suppressThumbClick=false;
+const $=id=>document.getElementById(id);
+const el=(t,c,html)=>{const e=document.createElement(t);if(c)e.className=c;if(html!=null)e.innerHTML=html;return e;};
+async function api(path, method='GET', body=null){
+  const opt={method, headers:{'Accept':'application/json'}};
+  if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
+  const r=await fetch(path,opt);return await r.json();
+}
+const esc=s=>(s==null?'':String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
+function flash(txt){ const n=$('savedNote'); n.textContent=txt; setTimeout(()=>{ if(n.textContent===txt) n.textContent=''; },1500); }
+
+// 保存当前图(勾选区域+位置)，自动调用
+async function saveCurrent(){
+  if(!curFile||!sessionId) return;
+  try{
+    await api('/api/annotate','POST',{session:sessionId,file:curFile,label:$('fileLabel').value.trim(),regions});
+    flash('已自动保存');
+  }catch(e){}
+}
+function autoSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveCurrent,350); }
+
+async function loadSessions(){ const ss=await api('/api/sessions'); const sel=$('sessionSel'); const keep=sel.value; sel.innerHTML=''; (ss.sessions||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=(s.label||s.id); sel.appendChild(o); }); if(keep && [...sel.options].some(o=>o.value===keep)) sel.value=keep; }
+async function refresh(){
+  try{
+    await loadSessions();
+    const st=await api('/api/status');
+    running=!!st.running;
+    if(st.session){sessionId=st.session.id; $('status').textContent=(running?'录制中：'+st.session.label:'已停止：'+st.session.label+'（可标注）');}
+    else {sessionId=null; $('status').textContent='未开始';}
+    const sc=await api('/api/screens');
+    screens=sc.screens||[]; deletedScreens=sc.deleted_screens||[]; annotations=sc.annotations||{};
+    if(sc.session) sessionId=sc.session.id;
+    $('sessionSel').value=sessionId||'';
+    for(const name of [...selectedScreens]) if(!screens.some(s=>s.name===name)) selectedScreens.delete(name);
+    renderScreens();
+    const opData=await api('/api/operations');
+    operations=opData.operations||[];
+    for(const id of [...selectedOperations]) if(!operations.some(op=>op.id===id)) selectedOperations.delete(id);
+    renderOperations();
+  }catch(e){ $('status').textContent='界面错误：'+e.message; }
+}
+function syncScreenSelection(){
+  document.querySelectorAll('#thumbs .thumb').forEach(t=>t.classList.toggle('picked',selectedScreens.has(t.dataset.file)));
+}
+function screenNumber(name){
+  const match=String(name||'').match(/^step_(\d+)\.png$/);
+  return match?`图${Number(match[1])+1}`:String(name||'');
+}
+function activeThumb(s){
+  const t=el('div','thumb'+(curFile===s.name?' sel':'')); t.dataset.file=s.name;
+  const a=annotations[s.name]||{};
+  const img=el('img'); img.src=s.url; img.alt=s.name;
+  t.appendChild(el('div','number',screenNumber(s.name)));
+  if(a.label) t.appendChild(el('div','badge',esc(a.label)));
+  if(a.regions&&a.regions.length) t.appendChild(el('div','sp','特·'+a.regions.length));
+  const del=el('button','thumbAction','×'); del.type='button'; del.title='删除图片'; del.setAttribute('aria-label','删除图片');
+  del.onmousedown=e=>e.stopPropagation();
+  del.onclick=e=>{e.stopPropagation();const names=selectedScreens.has(s.name)&&selectedScreens.size?[...selectedScreens]:[s.name];deleteScreens(names);};
+  t.appendChild(img); t.appendChild(del);
+  t.onmousedown=e=>{
+    if(e.button!==0||e.target.closest('button'))return;
+    if(e.ctrlKey){selectedScreens.has(s.name)?selectedScreens.delete(s.name):selectedScreens.add(s.name);syncScreenSelection();e.preventDefault();return;}
+    dragSelecting=true;dragMoved=false;selectedScreens.clear();selectedScreens.add(s.name);syncScreenSelection();
+  };
+  t.onmouseenter=()=>{if(dragSelecting&&!selectedScreens.has(s.name)){selectedScreens.add(s.name);dragMoved=true;syncScreenSelection();}};
+  t.onclick=e=>{if(e.ctrlKey||suppressThumbClick)return;selectedScreens.clear();selectedScreens.add(s.name);syncScreenSelection();select(s.name);};
+  return t;
+}
+function deletedThumb(s){
+  const t=el('div','thumb deleted');
+  const img=el('img'); img.src=s.url; img.alt=s.name;
+  const restore=el('button','thumbAction restore','↶'); restore.type='button'; restore.title='恢复图片'; restore.setAttribute('aria-label','恢复图片');
+  restore.onclick=e=>{e.stopPropagation();setScreensEnabled([s.name],true,false);};
+  t.appendChild(img);t.appendChild(el('div','number',screenNumber(s.name)));t.appendChild(restore);t.onclick=()=>select(s.name);return t;
+}
+function renderScreens(){
+  const root=$('thumbs');root.innerHTML='';screens.forEach(s=>root.appendChild(activeThumb(s)));syncScreenSelection();
+  const deletedRoot=$('deletedThumbs');deletedRoot.innerHTML='';deletedScreens.forEach(s=>deletedRoot.appendChild(deletedThumb(s)));
+  $('deletedCount').textContent=deletedScreens.length;
+}
+async function setScreensEnabled(names,enabled,pushUndo=true){
+  if(running){alert('请先停止录制，再整理截图');return;}
+  const result=await api('/api/screens/set-enabled','POST',{session:sessionId,names,enabled});
+  if(result.error){alert(result.error);return;}
+  if(!enabled&&pushUndo)deleteUndoStack.push([...names]);
+  if(!enabled&&curFile&&names.includes(curFile)){curFile=null;$('panel').style.display='none';$('wrap').style.display='none';}
+  selectedScreens.clear();flash(enabled?'已恢复图片':'已删除图片，Ctrl+Z 可撤回');await refresh();
+}
+async function deleteScreens(names){await setScreensEnabled(names,false,true);}
+async function undoDelete(){
+  const names=deleteUndoStack.pop();if(!names)return;
+  await setScreensEnabled(names,true,false);flash('已撤回上一次图片删除');
+}
+document.addEventListener('mouseup',()=>{suppressThumbClick=dragSelecting&&dragMoved;dragSelecting=false;setTimeout(()=>suppressThumbClick=false,0);});
+document.addEventListener('keydown',e=>{
+  const editing=['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!editing){e.preventDefault();undoDelete();}
+});
+function renderOperations(){
+  const root=$('operations'); root.innerHTML='';
+  const enabled=operations.filter(op=>op.enabled!==false).length;
+  $('operationCount').textContent=`${enabled}/${operations.length} 条启用`;
+  const names={tap:'点击',swipe:'滑动',long_press:'长按'};
+  operations.forEach((op,index)=>{
+    const row=el('label','operation '+(op.type||'tap')+(op.enabled===false?' ignored':''));
+    const check=document.createElement('input'); check.type='checkbox'; check.checked=selectedOperations.has(op.id);
+    check.onchange=()=>check.checked?selectedOperations.add(op.id):selectedOperations.delete(op.id);
+    const body=el('div');
+    const start=op.start||{}, end=op.end||start;
+    const route=op.type==='swipe'?`(${start.x},${start.y}) → (${end.x},${end.y})`:`(${end.x},${end.y})`;
+    body.appendChild(el('div','opMain',`#${op.sequence||index+1} ${names[op.type]||op.type||'操作'} ${esc(route)}`));
+    body.appendChild(el('div','opMeta',`${esc(op.time||'')} · ${Number(op.duration_ms||0)} ms${op.enabled===false?' · 已忽略':''}`));
+    row.appendChild(check); row.appendChild(body); root.appendChild(row);
+  });
+  $('btnIgnore').disabled=running;
+  $('btnRestore').disabled=running;
+}
+async function setSelectedOperations(enabled){
+  const ids=[...selectedOperations];
+  if(!ids.length){alert('请先勾选要整理的操作');return;}
+  const result=await api('/api/operations/set-enabled','POST',{session:sessionId,ids,enabled});
+  if(result.error){alert(result.error);return;}
+  selectedOperations.clear(); flash(enabled?'已恢复所选操作':'已忽略所选操作'); await refresh();
+}
+async function startRec(){
+  const label=$('label').value.trim(); if(!label){alert('请填写操作名');return;}
+  await api('/api/start','POST',{label});
+  curFile=null; selectedScreens.clear(); deleteUndoStack.length=0; $('panel').style.display='none'; $('wrap').style.display='none';
+  refresh();
+}
+async function stopRec(){ await api('/api/stop','POST',{}); refresh(); }
+
+async function select(name){
+  if(curFile && curFile!==name){ await saveCurrent(); }   // 切图前先自动保存当前图
+  curFile=name;
+  const sc=await api('/api/screens');
+  annotations=sc.annotations||{};
+  const a=annotations[name]||{};
+  $('fileLabel').value=a.label||'';
+  regions=(a.regions||[]).map(r=>({...r}));
+  $('panel').style.display='block';
+  renderRegions(); drawRegions();
+  const big=$('big'), wrap=$('wrap');
+  big.src='/img/'+sessionId+'/'+name;
+  big.onload=()=>{
+    wrap.style.display='block';
+    const view=$('viewer'), pad=24;
+    const availW=view.clientWidth-pad, availH=view.clientHeight-pad;
+    const natW=big.naturalWidth, natH=big.naturalHeight;
+    const scale=Math.min(availW/natW, availH/natH, 1);
+    const dispW=Math.max(1,Math.round(natW*scale)), dispH=Math.max(1,Math.round(natH*scale));
+    big.style.width=dispW+'px'; big.style.height=dispH+'px';
+    const cv=$('canvas'); cv.width=natW; cv.height=natH; cv.style.width=dispW+'px'; cv.style.height=dispH+'px';
+    drawRegions();
+  };
+  refresh();
+}
+function renderRegions(){
+  const L=$('regionList');L.innerHTML='';
+  regions.forEach((r,i)=>{
+    const row=el('div','region');
+    row.innerHTML=`<b>#${i+1} · ${r.x},${r.y} ${r.w}×${r.h}</b><span class="note">${esc(r.note||'')}</span>`;
+    const del=el('button','btn btn-gray','删'); del.style.cssText='padding:2px 8px;font-size:12px';
+    row.title='点击修改该特殊标注';
+    row.onclick=()=>editRegion(i);
+    del.onclick=e=>{e.stopPropagation();regions.splice(i,1);renderRegions();drawRegions();autoSave();};
+    row.appendChild(del); L.appendChild(row);
+  });
+  $('regionHint').textContent='共 '+regions.length+' 个特殊处理区域';
+}
+function editRegion(i){
+  const r=regions[i];if(!r)return;
+  const note=prompt('修改区域说明：',r.note||'');
+  if(note===null)return;
+  r.note=note.trim();renderRegions();drawRegions();autoSave();
+}
+function regionAtPoint(p){
+  for(let i=regions.length-1;i>=0;i--){const r=regions[i];if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h)return i;}
+  return -1;
+}
+function drawRegions(){
+  const cv=$('canvas'); if(!cv.width)return; const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+  regions.forEach(r=>{ctx.strokeStyle='#ffd24a';ctx.lineWidth=3;ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle='rgba(255,210,74,.15)';ctx.fillRect(r.x,r.y,r.w,r.h);});
+}
+const cv=$('canvas');
+cv.addEventListener('mousedown',e=>{if(!curFile)return;const p=pt(e),hit=regionAtPoint(p);if(hit>=0){drawing=false;editRegion(hit);return;}drawing=true;sx=p.x;sy=p.y;});
+cv.addEventListener('mousemove',e=>{const p=pt(e);cv.style.cursor=regionAtPoint(p)>=0?'pointer':'crosshair';if(!drawing)return;drawRegions();const ctx=cv.getContext('2d');ctx.strokeStyle='#6cf';ctx.lineWidth=1;ctx.strokeRect(sx,sy,p.x-sx,p.y-sy);});
+cv.addEventListener('mouseup',e=>{if(!drawing)return;drawing=false;const p=pt(e);let x=Math.min(sx,p.x),y=Math.min(sy,p.y),w=Math.abs(p.x-sx),h=Math.abs(p.y-sy);if(w<8||h<8)return;const note=prompt('该区域说明（可留空）：');regions.push({x:Math.round(x),y:Math.round(y),w:Math.round(w),h:Math.round(h),note:note||'',special:true});renderRegions();drawRegions();autoSave();});
+function pt(e){const cv=$('canvas');const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*(cv.width/r.width),y:(e.clientY-r.top)*(cv.height/r.height)};}
+async function saveAnno(){ await saveCurrent(); refresh(); }
+$('fileLabel').addEventListener('input',autoSave);
+$('sessionSel').addEventListener('change', async ()=>{ const sel=$('sessionSel'); if(sel.value && sel.value!==sessionId){ await api('/api/switch','POST',{id:sel.value}); curFile=null; selectedScreens.clear(); deleteUndoStack.length=0; $('panel').style.display='none'; $('wrap').style.display='none'; await refresh(); } });
+$('btnStart').onclick=startRec; $('btnStop').onclick=stopRec; $('btnSave').onclick=saveAnno;
+$('btnIgnore').onclick=()=>setSelectedOperations(false); $('btnRestore').onclick=()=>setSelectedOperations(true);
+refresh(); setInterval(refresh, 4000);
+</script>
+</body>
+</html>

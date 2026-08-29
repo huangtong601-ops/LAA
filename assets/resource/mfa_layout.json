@@ -1,0 +1,10 @@
+﻿{
+  "rows": 12,
+  "columns": 12,
+  "spacing": 10.0,
+  "task_list": { "row": 0, "col": 0, "row_span": 11, "col_span": 4 },
+  "settings":   { "row": 0, "col": 4, "row_span": 6, "col_span": 4 },
+  "task_desc":  { "row": 6, "col": 4, "row_span": 5, "col_span": 4 },
+  "live_view":  { "row": 0, "col": 8, "row_span": 5, "col_span": 4 },
+  "log":        { "row": 5, "col": 8, "row_span": 7, "col_span": 4 }
+}

@@ -1,0 +1,51 @@
+{
+    "BaseShiftTask": {},
+    "BaseCollectTask": {},
+    "BaseExchangeTask": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "base_order_flow"
+    },
+    "BaseScreenText": {
+        "recognition": "OCR",
+        "roi": [0, 0, 1920, 1080],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "BaseOrderTitle": {
+        "recognition": "OCR",
+        "roi": [520, 30, 1040, 100],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "BaseOrderCard": {
+        "recognition": "OCR",
+        "roi": [430, 145, 320, 420],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "BaseOrderCost": {
+        "recognition": "OCR",
+        "roi": [445, 410, 245, 95],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "BaseOrderInventory": {
+        "recognition": "OCR",
+        "roi": [175, 245, 100, 410],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "BaseSynthesisCount": {
+        "recognition": "OCR",
+        "roi": [1370, 270, 455, 180],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    }
+}

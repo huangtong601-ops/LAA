@@ -1,0 +1,16 @@
+{
+    "StartGameTask": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "startgame"
+    },
+    "LAA_StopTask": { "recognition": "DirectHit", "action": "StopTask" },
+    "SG_StartClick": { "recognition": "OCR", "roi": [760, 660, 400, 150], "text": ["开始游戏", "开始", "游戏"], "action": "Click" },
+    "SG_StartKey": { "recognition": "TemplateMatch", "template": "start_game_key.png", "roi": [760, 660, 400, 150], "threshold": 0.55, "action": "DoNothing" },
+    "SG_StartTemplate": { "recognition": "TemplateMatch", "template": "start_game.png", "roi": [720, 640, 500, 190], "threshold": 0.55, "action": "DoNothing" },
+    "NavMainBase": { "recognition": "TemplateMatch", "template": "anchor_base.png", "roi": [760, 850, 180, 210], "threshold": 0.68, "action": "DoNothing" },
+    "NavMainTask": { "recognition": "TemplateMatch", "template": "anchor_task.png", "roi": [880, 850, 190, 210], "threshold": 0.68, "action": "DoNothing" },
+    "NavIdleMainClock": { "recognition": "OCR", "roi": [80, 830, 620, 230], "text": ["A.M", "P.M", "FRIDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "SATURDAY", "SUNDAY"], "threshold": 0.2, "action": "DoNothing" },
+    "SG_WaitMain":  { "recognition": "TemplateMatch", "template": "anchor_chuji.png", "threshold": 0.8, "action": "DoNothing" },
+    "SG_AtMain":    { "recognition": "TemplateMatch", "template": "anchor_chuji.png", "threshold": 0.8, "action": "DoNothing" }
+}

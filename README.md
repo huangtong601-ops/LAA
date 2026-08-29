@@ -1,43 +1,60 @@
-<!-- markdownlint-disable MD033 MD041 -->
-<p align="center">
-  <img alt="LOGO" src="https://cdn.jsdelivr.net/gh/MaaAssistantArknights/design@main/v1/icons/maa-logo_512x512.png" width="256" height="256" />
-</p>
+# LAA（洛AA）
 
-<div align="center">
+基于 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 与
+[MaaPracticeBoilerplate](https://github.com/MaaXYZ/MaaPracticeBoilerplate)
+开发的《交错战线》自动化工具。
 
-# MaaPracticeBoilerplate
+## 当前功能
 
-</div>
+- 开始游戏：按任务需要启动 MuMu 与游戏，并处理已知开屏页面。
+- 竞技场：识别战力、按设置刷新和挑战、处理战斗与奖励页面。
+- 周本：从多个中间页面接续，识别四种地图情况并执行对应路线。
+- 基建-订单库：扫描自己与好友的固定订单栏位，按设置判断订单并支持缺少素材时自动合成。
+- 操作录制器：保存截图、点击和拖拽记录，并支持特殊标注。
 
-本仓库为 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 所提供的项目模板，开发者可基于此模板直接创建自己的 MaaXXX 项目。
+项目仍在持续开发中，当前版本属于开发预览版。功能效果依赖游戏界面、
+分辨率、模拟器环境与识别资源，使用前请阅读发布说明并自行验证。
 
-> **MaaFramework** 是基于图像识别技术、运用 [MAA](https://github.com/MaaAssistantArknights/MaaAssistantArknights) 开发经验去芜存菁、完全重写的新一代自动化黑盒测试框架。
-> 低代码的同时仍拥有高扩展性，旨在打造一款丰富、领先、且实用的开源库，助力开发者轻松编写出更好的黑盒测试程序，并推广普及。
+## 目录
 
-## 即刻开始
+- `agent/`：Python 自定义动作与任务流程。
+- `assets/`：MFA 接口、Pipeline、OCR 和图像识别资源。
+- `tools/`：录制器、诊断、测试和本地辅助工具。
+- `docs/`：MaaPracticeBoilerplate 原始开发文档。
+- `项目文档.md`：项目交接、页面逻辑和开发要求。
 
-**请不要直接克隆本仓库！你应该通过模板创建自己的项目！**  
+## 本地数据
 
-请阅读 [如何开发](./docs/zh_cn/develop/how_to_develop.md)。
+以下内容只保存在本机，不进入 Git 仓库：
 
-向本模板仓库提交改动前，请阅读 [PR 规范](./docs/zh_cn/develop/pull_request_guidelines.md)。
+- `gui/`：MFAAvalonia 完整运行目录。
+- `.venv/`：Python 虚拟环境。
+- `record/`：录制截图和标注原始数据。
+- `verification/`、`debug/`：验证截图与运行日志。
+- `config/`：本机运行状态和用户设置。
 
-## 生态共建
+可直接运行的完整版本应通过 GitHub Releases 发布，不应提交到源码历史。
 
-MAA 正计划建设为一类项目，而非舟的单一软件。
+## 发布说明
 
-若您的项目依赖于 MaaFramework，我们欢迎您将它命名为 MaaXXX, MXA, MAX 等等。当然，这是许可而不是限制，您也可以自由选择其他与 MAA 无关的名字，完全取决于您自己的想法！
+当前版本、已知限制和升级注意事项见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
 
-同时，我们也非常欢迎您提出 PR，在 [社区项目列表](https://github.com/MaaXYZ/MaaFramework#%E7%A4%BE%E5%8C%BA%E9%A1%B9%E7%9B%AE) 中添加上您的项目！
+## 隐私与安全
 
-## 常见问题
+仓库不包含本机录制截图、运行日志、用户设置、模拟器数据或访问凭据。
+提交问题时，请先检查日志和截图，避免公开账号、UID、邮箱等个人信息。
 
-请阅读 [常见问题](./docs/zh_cn/develop/faq.md)。
+## 开发环境
 
-## 鸣谢
+当前开发环境以 Windows、MuMu 模拟器 12、Python 和 MFAAvalonia 为主。
+详细路径、任务状态和行为要求见 `项目文档.md`。
 
-本项目由 **[MaaFramework](https://github.com/MaaXYZ/MaaFramework)** 强力驱动！
+## 致谢
 
-感谢以下开发者对本项目作出的贡献（下面链接改成你自己的项目地址）:
+- [MaaFramework](https://github.com/MaaXYZ/MaaFramework)
+- [MaaPracticeBoilerplate](https://github.com/MaaXYZ/MaaPracticeBoilerplate)
 
-[![Contributors](https://contrib.rocks/image?repo=MaaXYZ/MaaFramework&max=1000)](https://github.com/MaaXYZ/MaaFramework/graphs/contributors)
+## 开源协议
+
+本项目沿用模板仓库的 [MIT License](LICENSE)。项目中的第三方组件、游戏素材
+及相关商标仍分别归其权利人所有；MIT License 不授予这些第三方内容的权利。

@@ -1,0 +1,19 @@
+{
+    "NavMainBottomBar": { "recognition": "OCR", "roi": [740, 870, 1160, 205], "text": [], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainBaseText": { "recognition": "OCR", "roi": [790, 900, 230, 165], "text": ["基地"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainTaskText": { "recognition": "OCR", "roi": [900, 900, 250, 165], "text": ["任务"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainFormation": { "recognition": "OCR", "roi": [1025, 900, 255, 165], "text": ["编队"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainMember": { "recognition": "OCR", "roi": [1155, 900, 255, 165], "text": ["队员"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainBuild": { "recognition": "OCR", "roi": [1285, 900, 255, 165], "text": ["构建"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainSupplyStation": { "recognition": "OCR", "roi": [1410, 900, 270, 165], "text": ["补给站"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainSortie": { "recognition": "OCR", "roi": [1570, 800, 300, 260], "text": ["出击"], "threshold": 0.2, "action": "DoNothing" },
+
+    "NavMainExplorationGuide": { "recognition": "OCR", "roi": [95, 145, 310, 125], "text": ["勘探指南"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainPeriodicTraining": { "recognition": "OCR", "roi": [95, 265, 310, 125], "text": ["周期特训"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainLuckyGashapon": { "recognition": "OCR", "roi": [95, 375, 310, 135], "text": ["幸运扭蛋"], "threshold": 0.2, "action": "DoNothing" },
+
+    "NavMainNewSupply": { "recognition": "OCR", "roi": [1320, 115, 190, 155], "text": ["新途补给"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainTradeVoucher": { "recognition": "OCR", "roi": [1485, 115, 190, 155], "text": ["星贸凭证"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainActivity": { "recognition": "OCR", "roi": [1650, 115, 190, 155], "text": ["活动"], "threshold": 0.2, "action": "DoNothing" },
+    "NavMainStarRecall": { "recognition": "OCR", "roi": [1640, 260, 205, 165], "text": ["星辉回溯"], "threshold": 0.2, "action": "DoNothing" }
+}

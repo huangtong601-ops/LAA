@@ -1,0 +1,24 @@
+﻿{
+    // 竞技场：ArenaTask 入口执行 agent 自定义动作 arena_loop。
+    "ArenaTask": { "recognition": "DirectHit", "action": "Custom", "custom_action": "arena_loop" },
+
+    // OCR 读值（1920x1080）
+    "ArenaReadOwnPower":  { "recognition": "OCR", "roi": [61, 211, 157, 41] },
+    "ArenaReadOppPower":  { "recognition": "OCR", "roi": [1481, 222, 146, 43] },
+    "ArenaReadPoints":    { "recognition": "OCR", "roi": [1790, 221, 57, 48] },
+    "ArenaReadRefresh":   { "recognition": "OCR", "roi": [1658, 149, 91, 39] },
+    "ArenaReadChallenges":{ "recognition": "OCR", "roi": [355, 514, 75, 50] },
+    "ArenaPageTitle": { "recognition": "OCR", "roi": [620, 110, 1200, 120], "text": ["对手阵容", "刷新对手"], "threshold": 0.2, "action": "DoNothing" },
+    "ArenaDeployButton": { "recognition": "OCR", "roi": [1570, 900, 350, 170], "text": ["进攻部署"], "threshold": 0.2, "action": "DoNothing" },
+
+    // 模板 识别+点击
+    "ArenaGoChuji":   { "recognition": "TemplateMatch", "template": "anchor_chuji.png",     "action": "Click" },
+    "ArenaNavSim":    { "recognition": "TemplateMatch", "template": "arena_nav_sim.png",     "action": "Click" },
+    "ArenaEnter":     { "recognition": "TemplateMatch", "template": "arena_enter.png",       "action": "Click" },
+    "ArenaRefresh":   { "recognition": "TemplateMatch", "template": "arena_refresh.png",     "action": "Click" },
+    "ArenaAttack":    { "recognition": "TemplateMatch", "template": "arena_attack.png",      "action": "Click" },
+    "ConfirmStart":   { "recognition": "TemplateMatch", "template": "challenge_start.png",   "action": "Click" },
+
+    "ArenaResult": { "recognition": "OCR", "roi": [20, 20, 600, 220], "text": ["战斗胜利"], "threshold": 0.2 },
+    "ArenaReward": { "recognition": "OCR", "roi": [730, 220, 500, 170], "text": ["获得物品"], "threshold": 0.2 }
+}

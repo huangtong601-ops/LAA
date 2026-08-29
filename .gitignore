@@ -452,3 +452,13 @@ tools/ImageCropper/**/*.png
 
 config
 debug
+
+# LAA local runtime and development artifacts
+/.venv/
+/gui/
+/record/
+/verification/
+/.cur_session
+/maafw.log
+*.before-*
+*.bak

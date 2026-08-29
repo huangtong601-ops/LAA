@@ -1,0 +1,71 @@
+{
+    "WeeklyTask": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "weekly_flow"
+    },
+    "WeeklySpawnCharacter": {
+        "recognition": "TemplateMatch",
+        "template": ["weekly_spawn1_character.png", "weekly_spawn2_character.png"],
+        "roi": [430, 430, 930, 520],
+        "threshold": [0.48, 0.48]
+    },
+    "WeeklySpawnMarker": {
+        "recognition": "OCR",
+        "roi": [430, 350, 930, 500],
+        "text": ["01", "O1", "0I"]
+    },
+    "WeeklyMonster3Shield": {
+        "recognition": "TemplateMatch",
+        "template": "weekly_monster3_shield.png",
+        "roi": [610, 245, 720, 500],
+        "threshold": 0.80
+    },
+    "WeeklyRouteAnchor": {
+        "recognition": "TemplateMatch",
+        "template": "weekly_route_anchor.png",
+        "roi": [400, 40, 950, 500],
+        "threshold": 0.62
+    },
+    "WeeklyBossMarker": {
+        "recognition": "OCR",
+        "roi": [650, 0, 700, 380],
+        "text": ["BOSS", "BO55", "8055", "B0SS"]
+    },
+    "WeeklyPageText": {
+        "recognition": "OCR",
+        "roi": [0, 0, 1920, 1080],
+        "text": []
+    },
+    "WeeklySelectedBoss": {
+        "recognition": "OCR",
+        "roi": [1270, 75, 620, 120],
+        "text": []
+    },
+    "WeeklySkip": {
+        "recognition": "TemplateMatch",
+        "template": "weekly_skip.png",
+        "roi": [1600, 15, 280, 135],
+        "threshold": 0.52
+    },
+    "WeeklyPlayerTurn": {
+        "recognition": "OCR",
+        "roi": [1260, 900, 330, 155],
+        "text": "我方回合"
+    },
+    "WeeklyResult": {
+        "recognition": "TemplateMatch",
+        "template": "weekly_result.png",
+        "roi": [0, 0, 680, 260],
+        "threshold": 0.55
+    },
+    "WeeklyNoRewardConfirm": {
+        "recognition": "OCR",
+        "roi": [450, 390, 1050, 190],
+        "text": ["本周可领取的上限已满", "是否确认进入"]
+    },
+    "WeeklyReadProgress": {
+        "recognition": "OCR",
+        "roi": [90, 880, 500, 175]
+    }
+}
