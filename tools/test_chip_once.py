@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Run the read-only first-view chip scanner from the current game page."""
 
+import os
 import sys
 
 ROOT = r"E:\LAA\MaaBoilerplate"
@@ -15,6 +16,11 @@ from chip_filter_flow import ChipFilterFlow
 
 
 def main():
+    if "--dry-run" in sys.argv:
+        os.environ["LAA_CHIP_FILTER_DRY_RUN"] = "1"
+    limit_index = sys.argv.index("--limit") if "--limit" in sys.argv else -1
+    if limit_index >= 0 and limit_index + 1 < len(sys.argv):
+        os.environ["LAA_CHIP_FILTER_SCAN_LIMIT"] = sys.argv[limit_index + 1]
     Toolkit.init_option(ROOT)
     controller = AdbController(
         adb_path=r"E:\MuMuPlayer-12.0\shell\adb.exe",

@@ -24,5 +24,19 @@
         "text": [],
         "threshold": 0.2,
         "action": "DoNothing"
+    },
+    "ChipCapacity": {
+        "recognition": "OCR",
+        "roi": [960, 20, 330, 80],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "ChipLockedBadge": {
+        "recognition": "TemplateMatch",
+        "template": "chip_locked_badge.png",
+        "roi": [64, 165, 52, 52],
+        "threshold": 0.72,
+        "action": "DoNothing"
     }
 }
