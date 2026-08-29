@@ -1,0 +1,841 @@
+diff --git a/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs b/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387b09ddcbf
+--- /dev/null
++++ b/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs
+@@ -0,0 +1,213 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.IO.Compression;
++using System.Linq;
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Json;
++
++namespace MFAAvalonia.Features.ChipFilter;
++
++public static class ChipFilterCatalog
++{
++    public static readonly string[] MainSkills =
++    [
++        "穿甲", "切割", "征服", "重击", "支援", "精力", "蓄能", "收割", "屏障", "铁壁",
++        "灵巧", "暴怒", "致命", "腐蚀", "集中", "金刚", "痛击", "扩大", "物攻", "能量",
++        "装填", "光幕", "钝化", "特防", "神威", "神力", "神速", "振奋", "消除", "重伤",
++        "连击", "乘风", "反击", "协击", "引爆"
++    ];
++
++    public static readonly string[] SubSkills =
++    ["攻击", "耐久", "防御", "速度", "瞄准", "暴伤", "命中", "坚韧"];
++}
++
++public static class ChipLockModes
++{
++    public const string Lock = "lock";
++    public const string Conditional = "conditional";
++    public const string Unlock = "unlock";
++}
++
++public sealed class ChipFilterPlan
++{
++    public int Version { get; set; } = 2;
++    public string Name { get; set; } = "我的芯片筛选方案";
++    public Dictionary<int, ChipLevelRule> Levels { get; set; } = [];
++
++    public static ChipFilterPlan CreateDefault() => new()
++    {
++        Levels = new Dictionary<int, ChipLevelRule>
++        {
++            [1] = new() { Mode = ChipLockModes.Unlock },
++            [2] = new() { Mode = ChipLockModes.Conditional },
++            [3] = new() { Mode = ChipLockModes.Lock }
++        }
++    };
++}
++
++public sealed class ChipLevelRule
++{
++    public string Mode { get; set; } = ChipLockModes.Unlock;
++    public Dictionary<string, ChipSubSkillRule> Conditions { get; set; } = [];
++}
++
++public sealed class ChipSubSkillRule
++{
++    public Dictionary<int, List<string>> MinimumLevels { get; set; } = new()
++    {
++        [1] = [], [2] = [], [3] = []
++    };
++
++    public ChipSubSkillRule Clone() => new()
++    {
++        MinimumLevels = MinimumLevels.ToDictionary(pair => pair.Key, pair => pair.Value.ToList())
++    };
++}
++
++public static class ChipFilterPlanStore
++{
++    public static string PlanPath => Path.Combine(ResolveProjectRoot(), "config", "chip_filter_plan.json");
++
++    public static ChipFilterPlan Load()
++    {
++        if (!File.Exists(PlanPath))
++            return ChipFilterPlan.CreateDefault();
++        try
++        {
++            var plan = JsonSerializer.Deserialize<ChipFilterPlan>(File.ReadAllText(PlanPath), JsonOptions());
++            return ChipFilterPlanCodec.Normalize(plan ?? ChipFilterPlan.CreateDefault());
++        }
++        catch
++        {
++            return ChipFilterPlan.CreateDefault();
++        }
++    }
++
++    public static void Save(ChipFilterPlan plan)
++    {
++        var normalized = ChipFilterPlanCodec.Normalize(plan);
++        Directory.CreateDirectory(Path.GetDirectoryName(PlanPath)!);
++        var temp = PlanPath + ".tmp";
++        File.WriteAllText(temp, JsonSerializer.Serialize(normalized, JsonOptions()), Encoding.UTF8);
++        File.Move(temp, PlanPath, true);
++    }
++
++    internal static JsonSerializerOptions JsonOptions() => new()
++    {
++        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
++        WriteIndented = true
++    };
++
++    private static string ResolveProjectRoot()
++    {
++        var configured = Environment.GetEnvironmentVariable("LAA_PROJECT_ROOT");
++        if (!string.IsNullOrWhiteSpace(configured))
++            return configured;
++
++        var current = new DirectoryInfo(AppContext.BaseDirectory);
++        for (var i = 0; i < 5 && current != null; i++, current = current.Parent)
++        {
++            if (File.Exists(Path.Combine(current.FullName, "interface.json")))
++                return string.Equals(current.Name, "gui", StringComparison.OrdinalIgnoreCase)
++                    ? current.Parent?.FullName ?? current.FullName
++                    : current.FullName;
++        }
++        return Directory.GetParent(AppContext.BaseDirectory)?.FullName ?? AppContext.BaseDirectory;
++    }
++}
++
++public static class ChipFilterPlanCodec
++{
++    private const string Prefix = "LAA-CF2";
++
++    public static ChipFilterPlan Normalize(ChipFilterPlan source)
++    {
++        var name = (source.Name ?? string.Empty).Trim();
++        if (name.Length is < 1 or > 40)
++            throw new InvalidDataException("方案名称不能为空且不能超过40个字符");
++
++        var defaults = ChipFilterPlan.CreateDefault();
++        var result = new ChipFilterPlan { Name = name, Version = 2 };
++        foreach (var level in new[] { 1, 2, 3 })
++        {
++            source.Levels.TryGetValue(level, out var sourceLevel);
++            sourceLevel ??= defaults.Levels[level];
++            if (sourceLevel.Mode is not (ChipLockModes.Lock or ChipLockModes.Conditional or ChipLockModes.Unlock))
++                throw new InvalidDataException($"主词条{level}级的处理方式无效");
++
++            var targetLevel = new ChipLevelRule { Mode = sourceLevel.Mode };
++            if (sourceLevel.Mode == ChipLockModes.Conditional)
++            {
++                foreach (var main in ChipFilterCatalog.MainSkills)
++                {
++                    if (!sourceLevel.Conditions.TryGetValue(main, out var condition))
++                        continue;
++                    var normalizedCondition = new ChipSubSkillRule();
++                    var assigned = new HashSet<string>();
++                    foreach (var threshold in new[] { 1, 2, 3 })
++                    {
++                        condition.MinimumLevels.TryGetValue(threshold, out var values);
++                        var selected = (values ?? [])
++                            .Where(ChipFilterCatalog.SubSkills.Contains)
++                            .Where(assigned.Add)
++                            .OrderBy(value => Array.IndexOf(ChipFilterCatalog.SubSkills, value))
++                            .ToList();
++                        normalizedCondition.MinimumLevels[threshold] = selected;
++                    }
++                    targetLevel.Conditions[main] = normalizedCondition;
++                }
++            }
++            result.Levels[level] = targetLevel;
++        }
++        return result;
++    }
++
++    public static string Encode(ChipFilterPlan source)
++    {
++        var normalized = Normalize(source);
++        var raw = JsonSerializer.SerializeToUtf8Bytes(normalized, ChipFilterPlanStore.JsonOptions());
++        using var output = new MemoryStream();
++        using (var zlib = new ZLibStream(output, CompressionLevel.SmallestSize, true))
++            zlib.Write(raw);
++        var packed = output.ToArray();
++        var checksum = Convert.ToHexString(SHA256.HashData(packed)).ToLowerInvariant()[..10];
++        var payload = Convert.ToBase64String(packed).TrimEnd('=').Replace('+', '-').Replace('/', '_');
++        return $"{Prefix}-{checksum}-{payload}";
++    }
++
++    public static ChipFilterPlan Decode(string code)
++    {
++        var compact = string.Concat((code ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
++        if (compact.Length > 32768)
++            throw new InvalidDataException("方案码过长");
++        var prefix = Prefix + "-";
++        if (!compact.StartsWith(prefix, StringComparison.Ordinal))
++            throw new InvalidDataException("不是受支持的LAA-CF2芯片方案码");
++        var split = compact[prefix.Length..].Split('-', 2);
++        if (split.Length != 2)
++            throw new InvalidDataException("方案码内容损坏");
++        var payload = split[1].Replace('-', '+').Replace('_', '/');
++        payload += new string('=', (4 - payload.Length % 4) % 4);
++        var packed = Convert.FromBase64String(payload);
++        var checksum = Convert.ToHexString(SHA256.HashData(packed)).ToLowerInvariant()[..10];
++        if (!string.Equals(checksum, split[0], StringComparison.OrdinalIgnoreCase))
++            throw new InvalidDataException("方案码校验失败");
++        using var input = new MemoryStream(packed);
++        using var zlib = new ZLibStream(input, CompressionMode.Decompress);
++        using var output = new MemoryStream();
++        var buffer = new byte[8192];
++        while (true)
++        {
++            var read = zlib.Read(buffer, 0, Math.Min(buffer.Length, 65537 - (int)output.Length));
++            if (read == 0)
++                break;
++            output.Write(buffer, 0, read);
++            if (output.Length > 65536)
++                throw new InvalidDataException("方案数据过大");
++        }
++        var plan = JsonSerializer.Deserialize<ChipFilterPlan>(output.ToArray(), ChipFilterPlanStore.JsonOptions());
++        return Normalize(plan ?? throw new InvalidDataException("方案码无法解析"));
++    }
++}
+diff --git a/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..57c389f4a1f69ce4462ee886e50eb2457273282d
+--- /dev/null
++++ b/MFAAvalonia/Features/ChipFilter/ChipFilterPlanWindow.cs
+@@ -0,0 +1,559 @@
++using Avalonia;
++using Avalonia.Controls;
++using Avalonia.Controls.Primitives;
++using Avalonia.Layout;
++using Avalonia.Media;
++using MFAAvalonia.Helper;
++using SukiUI.Controls;
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Threading.Tasks;
++
++namespace MFAAvalonia.Features.ChipFilter;
++
++public sealed class ChipFilterPlanWindow : SukiWindow
++{
++    private static readonly IBrush Accent = new SolidColorBrush(Color.Parse("#4F72E8"));
++    private static readonly IBrush MutedBorder = new SolidColorBrush(Color.Parse("#667080"));
++    private static readonly IBrush Configured = new SolidColorBrush(Color.Parse("#2D8A62"));
++    private readonly Dictionary<int, Dictionary<string, ToggleButton>> _modeButtons = [];
++    private readonly Dictionary<int, Button> _configureButtons = [];
++    private readonly TextBox _nameBox = new() { Watermark = "方案名称", MaxLength = 40 };
++    private readonly TextBox _importBox = new() { Watermark = "在这里粘贴方案码" };
++    private readonly TextBlock _conditionTitle = new() { FontSize = 18, FontWeight = FontWeight.SemiBold };
++    private readonly TextBlock _progress = new();
++    private readonly WrapPanel _skillPanel = new();
++    private readonly Border _conditionArea;
++    private ChipFilterPlan _plan;
++    private int _activeLevel = 2;
++    private string? _lastConfiguredMainSkill;
++
++    public ChipFilterPlanWindow()
++    {
++        Title = "芯片筛选方案";
++        Width = Math.Max(980, Instances.RootView?.Bounds.Width ?? 1180);
++        Height = Math.Max(680, Instances.RootView?.Bounds.Height ?? 760);
++        MinWidth = 900;
++        MinHeight = 640;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++        _plan = ChipFilterPlanStore.Load();
++
++        _conditionArea = BuildConditionArea();
++        Content = BuildLayout();
++        LoadPlanIntoControls();
++    }
++
++    public static async Task ShowForCurrentProjectAsync(Window? owner = null)
++    {
++        var window = new ChipFilterPlanWindow();
++        await window.ShowDialog(owner ?? Instances.RootView);
++    }
++
++    private Control BuildLayout()
++    {
++        var root = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
++        root.Children.Add(BuildTopBar());
++
++        var levelCards = new UniformGrid { Columns = 3, Rows = 1, Margin = new Thickness(0, 14, 0, 14) };
++        Grid.SetRow(levelCards, 1);
++        foreach (var level in new[] { 1, 2, 3 })
++            levelCards.Children.Add(BuildLevelCard(level));
++        root.Children.Add(levelCards);
++
++        Grid.SetRow(_conditionArea, 2);
++        root.Children.Add(_conditionArea);
++
++        var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 14, 0, 0) };
++        var path = new TextBlock
++        {
++            Text = $"保存位置：{ChipFilterPlanStore.PlanPath}",
++            Opacity = 0.65,
++            VerticalAlignment = VerticalAlignment.Center,
++            TextTrimming = TextTrimming.CharacterEllipsis
++        };
++        footer.Children.Add(path);
++        var save = new Button { Content = "保存方案", Classes = { "Primary" }, MinWidth = 120 };
++        save.Click += async (_, _) => await SaveAsync();
++        Grid.SetColumn(save, 1);
++        footer.Children.Add(save);
++        Grid.SetRow(footer, 3);
++        root.Children.Add(footer);
++        return root;
++    }
++
++    private Control BuildTopBar()
++    {
++        var panel = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnDefinitions = new ColumnDefinitions("*,Auto") };
++        var titleRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 10) };
++        titleRow.Children.Add(new TextBlock
++        {
++            Text = "芯片筛选方案",
++            FontSize = 24,
++            FontWeight = FontWeight.SemiBold,
++            VerticalAlignment = VerticalAlignment.Center
++        });
++        _nameBox.Margin = new Thickness(18, 0, 0, 0);
++        _nameBox.MaxWidth = 360;
++        _nameBox.HorizontalAlignment = HorizontalAlignment.Left;
++        Grid.SetColumn(_nameBox, 1);
++        titleRow.Children.Add(_nameBox);
++        Grid.SetColumnSpan(titleRow, 2);
++        panel.Children.Add(titleRow);
++
++        _importBox.MinWidth = 520;
++        Grid.SetRow(_importBox, 1);
++        panel.Children.Add(_importBox);
++        var import = new Button { Content = "导入方案码", Margin = new Thickness(10, 0, 0, 0), MinWidth = 112 };
++        import.Click += async (_, _) => await ImportAsync();
++        Grid.SetRow(import, 1);
++        Grid.SetColumn(import, 1);
++        panel.Children.Add(import);
++        return panel;
++    }
++
++    private Control BuildLevelCard(int level)
++    {
++        var content = new StackPanel { Spacing = 10 };
++        content.Children.Add(new TextBlock
++        {
++            Text = $"芯片主词条 {level} 级",
++            FontSize = 17,
++            FontWeight = FontWeight.SemiBold,
++            HorizontalAlignment = HorizontalAlignment.Center
++        });
++
++        var segment = new UniformGrid { Columns = 3, Rows = 1 };
++        _modeButtons[level] = [];
++        foreach (var (mode, label) in new[]
++                 {
++                     (ChipLockModes.Lock, "锁定"),
++                     (ChipLockModes.Conditional, "条件锁定"),
++                     (ChipLockModes.Unlock, "不锁定")
++                 })
++        {
++            var button = new ToggleButton { Content = label, MinHeight = 34, Margin = new Thickness(2) };
++            button.Click += (_, _) => SetMode(level, mode);
++            _modeButtons[level][mode] = button;
++            segment.Children.Add(button);
++        }
++        content.Children.Add(segment);
++
++        var configure = new Button
++        {
++            Content = "配置副词条条件",
++            HorizontalAlignment = HorizontalAlignment.Stretch
++        };
++        configure.Click += (_, _) => ActivateConditionalLevel(level);
++        _configureButtons[level] = configure;
++        content.Children.Add(configure);
++
++        return new Border
++        {
++            Child = content,
++            BorderBrush = MutedBorder,
++            BorderThickness = new Thickness(1),
++            CornerRadius = new CornerRadius(6),
++            Padding = new Thickness(14),
++            Margin = new Thickness(5, 0)
++        };
++    }
++
++    private Border BuildConditionArea()
++    {
++        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(0, 0, 0, 10) };
++        header.Children.Add(_conditionTitle);
++        _progress.VerticalAlignment = VerticalAlignment.Center;
++        Grid.SetColumn(_progress, 1);
++        header.Children.Add(_progress);
++        var copy = new Button { Content = "复制当前配置到未配置词条", Margin = new Thickness(12, 0, 0, 0) };
++        copy.Click += async (_, _) => await CopyToUnconfiguredAsync();
++        Grid.SetColumn(copy, 2);
++        header.Children.Add(copy);
++
++        var content = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
++        content.Children.Add(header);
++        var scroll = new ScrollViewer
++        {
++            Content = _skillPanel,
++            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
++            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
++        };
++        Grid.SetRow(scroll, 1);
++        content.Children.Add(scroll);
++        return new Border
++        {
++            Child = content,
++            BorderBrush = MutedBorder,
++            BorderThickness = new Thickness(1),
++            CornerRadius = new CornerRadius(6),
++            Padding = new Thickness(14)
++        };
++    }
++
++    private void LoadPlanIntoControls()
++    {
++        _nameBox.Text = _plan.Name;
++        foreach (var level in new[] { 1, 2, 3 })
++            UpdateModeButtons(level);
++        _activeLevel = _plan.Levels.Where(pair => pair.Value.Mode == ChipLockModes.Conditional)
++            .Select(pair => pair.Key).DefaultIfEmpty(2).First();
++        RefreshConditionArea();
++    }
++
++    private void SetMode(int level, string mode)
++    {
++        _plan.Levels[level].Mode = mode;
++        UpdateModeButtons(level);
++        if (mode == ChipLockModes.Conditional)
++            ActivateConditionalLevel(level);
++        else if (_activeLevel == level)
++        {
++            _activeLevel = _plan.Levels.Where(pair => pair.Value.Mode == ChipLockModes.Conditional)
++                .Select(pair => pair.Key).DefaultIfEmpty(level).First();
++            RefreshConditionArea();
++        }
++    }
++
++    private void UpdateModeButtons(int level)
++    {
++        var current = _plan.Levels[level].Mode;
++        foreach (var pair in _modeButtons[level])
++        {
++            pair.Value.IsChecked = pair.Key == current;
++            pair.Value.Background = pair.Key == current ? Accent : Brushes.Transparent;
++            pair.Value.Foreground = pair.Key == current ? Brushes.White : null;
++        }
++        _configureButtons[level].IsVisible = current == ChipLockModes.Conditional;
++    }
++
++    private void ActivateConditionalLevel(int level)
++    {
++        _activeLevel = level;
++        RefreshConditionArea();
++    }
++
++    private void RefreshConditionArea()
++    {
++        var rule = _plan.Levels[_activeLevel];
++        _conditionArea.IsVisible = rule.Mode == ChipLockModes.Conditional;
++        if (!_conditionArea.IsVisible)
++            return;
++
++        _conditionTitle.Text = $"主词条 {_activeLevel} 级：按类别配置副词条";
++        _progress.Text = $"已配置 {rule.Conditions.Count}/{ChipFilterCatalog.MainSkills.Length}";
++        _skillPanel.Children.Clear();
++        foreach (var main in ChipFilterCatalog.MainSkills)
++        {
++            var done = rule.Conditions.ContainsKey(main);
++            var button = new Button
++            {
++                Content = done ? $"{main}  已配置" : $"{main}  待配置",
++                MinWidth = 128,
++                Margin = new Thickness(2),
++                BorderBrush = done ? Configured : MutedBorder
++            };
++            button.Click += async (_, _) => await ConfigureMainSkillAsync(main);
++            _skillPanel.Children.Add(button);
++        }
++    }
++
++    private async Task ConfigureMainSkillAsync(string main)
++    {
++        var levelRule = _plan.Levels[_activeLevel];
++        levelRule.Conditions.TryGetValue(main, out var existing);
++        var wizard = new ChipSubSkillWizard(_activeLevel, main, existing);
++        if (await wizard.ShowDialog<bool>(this))
++        {
++            levelRule.Conditions[main] = wizard.Result;
++            _lastConfiguredMainSkill = main;
++            RefreshConditionArea();
++        }
++    }
++
++    private async Task CopyToUnconfiguredAsync()
++    {
++        var rule = _plan.Levels[_activeLevel];
++        if (_lastConfiguredMainSkill == null || !rule.Conditions.TryGetValue(_lastConfiguredMainSkill, out var source))
++        {
++            await NoticeWindow.ShowAsync(this, "请先完成一个主词条的副词条设置，再使用批量复制。");
++            return;
++        }
++        var count = 0;
++        foreach (var main in ChipFilterCatalog.MainSkills.Where(main => !rule.Conditions.ContainsKey(main)))
++        {
++            rule.Conditions[main] = source.Clone();
++            count++;
++        }
++        RefreshConditionArea();
++        await NoticeWindow.ShowAsync(this, $"已将“{_lastConfiguredMainSkill}”的设置复制到 {count} 个未配置主词条。");
++    }
++
++    private async Task ImportAsync()
++    {
++        try
++        {
++            _plan = ChipFilterPlanCodec.Decode(_importBox.Text ?? string.Empty);
++            _importBox.Text = string.Empty;
++            _lastConfiguredMainSkill = null;
++            LoadPlanIntoControls();
++            await NoticeWindow.ShowAsync(this, "方案码导入成功，检查后点击“保存方案”即可使用。");
++        }
++        catch (Exception ex)
++        {
++            await NoticeWindow.ShowAsync(this, ex.Message);
++        }
++    }
++
++    private async Task SaveAsync()
++    {
++        _plan.Name = (_nameBox.Text ?? string.Empty).Trim();
++        foreach (var level in new[] { 1, 2, 3 })
++        {
++            var rule = _plan.Levels[level];
++            if (rule.Mode == ChipLockModes.Conditional && rule.Conditions.Count != ChipFilterCatalog.MainSkills.Length)
++            {
++                ActivateConditionalLevel(level);
++                await NoticeWindow.ShowAsync(this,
++                    $"主词条 {level} 级还有 {ChipFilterCatalog.MainSkills.Length - rule.Conditions.Count} 个类别未配置。");
++                return;
++            }
++        }
++
++        try
++        {
++            ChipFilterPlanStore.Save(_plan);
++            var export = await ChoiceWindow.AskAsync(this, "方案已保存！是否导出方案码？", "是", "否");
++            if (export)
++                await new PlanCodeWindow(ChipFilterPlanCodec.Encode(_plan)).ShowDialog(this);
++        }
++        catch (Exception ex)
++        {
++            await NoticeWindow.ShowAsync(this, ex.Message);
++        }
++    }
++}
++
++internal sealed class ChipSubSkillWizard : SukiWindow
++{
++    private readonly Dictionary<int, HashSet<string>> _selected = new()
++    {
++        [1] = [], [2] = [], [3] = []
++    };
++    private readonly StackPanel _choices = new() { Spacing = 8 };
++    private readonly TextBlock _heading = new() { FontSize = 19, FontWeight = FontWeight.SemiBold };
++    private readonly TextBlock _stepText = new();
++    private readonly Button _back = new() { Content = "上一步" };
++    private readonly Button _next = new() { Content = "确认并继续", Classes = { "Primary" } };
++    private int _step = 1;
++
++    public ChipSubSkillRule Result { get; private set; } = new();
++
++    public ChipSubSkillWizard(int mainLevel, string mainSkill, ChipSubSkillRule? existing)
++    {
++        Title = $"{mainSkill}副词条条件";
++        Width = 720;
++        Height = 530;
++        MinWidth = 620;
++        MinHeight = 480;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++        if (existing != null)
++            foreach (var level in new[] { 1, 2, 3 })
++                _selected[level] = new HashSet<string>(existing.MinimumLevels.GetValueOrDefault(level, []));
++
++        _heading.Text = $"主词条 {mainLevel} 级 · {mainSkill}";
++        Content = BuildLayout();
++        RenderStep();
++    }
++
++    private Control BuildLayout()
++    {
++        var root = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
++        root.Children.Add(_heading);
++        _stepText.Margin = new Thickness(0, 8, 0, 12);
++        Grid.SetRow(_stepText, 1);
++        root.Children.Add(_stepText);
++        var scroll = new ScrollViewer { Content = _choices, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
++        Grid.SetRow(scroll, 2);
++        root.Children.Add(scroll);
++        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 10, Margin = new Thickness(0, 14, 0, 0) };
++        _back.Click += (_, _) => { if (_step > 1) { _step--; RenderStep(); } };
++        _next.Click += (_, _) => Advance();
++        footer.Children.Add(_back);
++        footer.Children.Add(_next);
++        Grid.SetRow(footer, 3);
++        root.Children.Add(footer);
++        return root;
++    }
++
++    private void RenderStep()
++    {
++        _stepText.Text = $"第 {_step}/3 步：副词条等级大于等于 {_step} 级时锁定";
++        _back.IsEnabled = _step > 1;
++        _next.Content = _step == 3 ? "完成设置" : "确认并继续";
++        _choices.Children.Clear();
++
++        var usedEarlier = new HashSet<string>(_selected.Where(pair => pair.Key < _step).SelectMany(pair => pair.Value));
++        var available = ChipFilterCatalog.SubSkills.Where(skill => !usedEarlier.Contains(skill)).ToArray();
++        var none = new CheckBox { Content = "无", IsChecked = _selected[_step].Count == 0, Margin = new Thickness(4) };
++        var boxes = new List<CheckBox>();
++        foreach (var skill in available)
++        {
++            var box = new CheckBox { Content = skill, IsChecked = _selected[_step].Contains(skill), Margin = new Thickness(4) };
++            box.IsCheckedChanged += (_, _) =>
++            {
++                if (box.IsChecked == true)
++                    none.IsChecked = false;
++                SyncSelection(boxes);
++            };
++            boxes.Add(box);
++            _choices.Children.Add(box);
++        }
++        none.IsCheckedChanged += (_, _) =>
++        {
++            if (none.IsChecked == true)
++                foreach (var box in boxes) box.IsChecked = false;
++            SyncSelection(boxes);
++        };
++        _choices.Children.Insert(0, none);
++    }
++
++    private void SyncSelection(IEnumerable<CheckBox> boxes)
++    {
++        _selected[_step] = boxes.Where(box => box.IsChecked == true).Select(box => box.Content?.ToString() ?? string.Empty)
++            .Where(value => value.Length > 0).ToHashSet();
++        foreach (var later in new[] { 1, 2, 3 }.Where(level => level > _step))
++            _selected[later].ExceptWith(_selected[_step]);
++    }
++
++    private void Advance()
++    {
++        if (_step < 3)
++        {
++            _step++;
++            RenderStep();
++            return;
++        }
++        Result = new ChipSubSkillRule
++        {
++            MinimumLevels = _selected.ToDictionary(pair => pair.Key, pair => pair.Value.ToList())
++        };
++        Close(true);
++    }
++}
++
++internal sealed class NoticeWindow : SukiWindow
++{
++    private NoticeWindow(string message)
++    {
++        Title = "提示";
++        Width = 480;
++        Height = 210;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++        var close = new Button { Content = "确定", Classes = { "Primary" }, HorizontalAlignment = HorizontalAlignment.Right, MinWidth = 90 };
++        close.Click += (_, _) => Close();
++        Content = new StackPanel
++        {
++            Margin = new Thickness(22),
++            Spacing = 24,
++            Children =
++            {
++                new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, FontSize = 16 },
++                close
++            }
++        };
++    }
++
++    public static Task ShowAsync(Window owner, string message) => new NoticeWindow(message).ShowDialog(owner);
++}
++
++internal sealed class ChoiceWindow : SukiWindow
++{
++    private ChoiceWindow(string message, string yes, string no)
++    {
++        Title = "确认";
++        Width = 500;
++        Height = 220;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++        var yesButton = new Button { Content = yes, Classes = { "Primary" }, MinWidth = 90 };
++        var noButton = new Button { Content = no, MinWidth = 90 };
++        yesButton.Click += (_, _) => Close(true);
++        noButton.Click += (_, _) => Close(false);
++        Content = new Grid
++        {
++            Margin = new Thickness(22),
++            RowDefinitions = new RowDefinitions("*,Auto"),
++            Children =
++            {
++                new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, FontSize = 17 },
++                new StackPanel
++                {
++                    Orientation = Orientation.Horizontal,
++                    HorizontalAlignment = HorizontalAlignment.Right,
++                    Spacing = 10,
++                    Children = { noButton, yesButton },
++                    [Grid.RowProperty] = 1
++                }
++            }
++        };
++    }
++
++    public static Task<bool> AskAsync(Window owner, string message, string yes, string no) =>
++        new ChoiceWindow(message, yes, no).ShowDialog<bool>(owner);
++}
++
++internal sealed class PlanCodeWindow : SukiWindow
++{
++    private readonly TextBlock _notice = new() { Text = "已复制到剪贴板，快去分享吧~", IsVisible = false };
++
++    public PlanCodeWindow(string code)
++    {
++        Title = "方案码如下";
++        Width = 780;
++        Height = 360;
++        WindowStartupLocation = WindowStartupLocation.CenterOwner;
++        Icon = IconHelper.WindowIcon;
++        var codeBox = new TextBox
++        {
++            Text = code,
++            IsReadOnly = true,
++            AcceptsReturn = true,
++            TextWrapping = TextWrapping.Wrap,
++            MinHeight = 150
++        };
++        var copy = new Button { Content = "复制", Classes = { "Primary" }, MinWidth = 90 };
++        var close = new Button { Content = "关闭", MinWidth = 90 };
++        copy.Click += async (_, _) =>
++        {
++            await Clipboard.SetTextAsync(code);
++            _notice.IsVisible = true;
++            await Task.Delay(TimeSpan.FromSeconds(10));
++            _notice.IsVisible = false;
++        };
++        close.Click += (_, _) => Close();
++        var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(0, 12, 0, 0) };
++        _notice.VerticalAlignment = VerticalAlignment.Center;
++        buttons.Children.Add(_notice);
++        Grid.SetColumn(copy, 1);
++        buttons.Children.Add(copy);
++        close.Margin = new Thickness(10, 0, 0, 0);
++        Grid.SetColumn(close, 2);
++        buttons.Children.Add(close);
++        Content = new StackPanel
++        {
++            Margin = new Thickness(20),
++            Spacing = 10,
++            Children =
++            {
++                new TextBlock { Text = "方案码如下", FontSize = 20, FontWeight = FontWeight.SemiBold },
++                codeBox,
++                buttons
++            }
++        };
++    }
++}
+diff --git a/MFAAvalonia/Views/Pages/TaskQueueView.axaml.cs b/MFAAvalonia/Views/Pages/TaskQueueView.axaml.cs
+index fb1f3df1b9c8ab46a05bbfa4f9f1f68140b42f55..367a7db33236dab7185debb7e89472d8f538fa83 100644
+--- a/MFAAvalonia/Views/Pages/TaskQueueView.axaml.cs
++++ b/MFAAvalonia/Views/Pages/TaskQueueView.axaml.cs
+@@ -35,6 +35,7 @@ using Lang.Avalonia.MarkupExtensions;
+ using MaaFramework.Binding;
+ using MFAAvalonia.Views.Windows;
+ using MFAAvalonia.Views.UserControls.Settings;
++using MFAAvalonia.Features.ChipFilter;
+ using Newtonsoft.Json.Linq;
+ using SukiUI.Dialogs;
+ using SukiUI.Controls;
+@@ -52,6 +53,7 @@ public partial class TaskQueueView : UserControl
+ 
+     private const double TopToolbarCompactWidthThreshold = 980;
+     private bool _isTopToolbarCompact;
++    private bool _chipFilterPlanWindowOpen;
+ 
+ 
+     public TaskQueueView()
+@@ -656,6 +658,12 @@ public partial class TaskQueueView : UserControl
+     {
+         if (DataContext is not TaskQueueViewModel vm) return;
+ 
++        if (!init && value && dragItem.InterfaceItem?.Entry == "ChipDetailReadTask")
++        {
++            OpenChipFilterPlanWindow(dragItem);
++            return;
++        }
++
+         if (!init)
+             vm.IsCommon = true;
+ 
+@@ -787,6 +795,23 @@ public partial class TaskQueueView : UserControl
+         }
+     }
+ 
++    private async void OpenChipFilterPlanWindow(DragItemViewModel dragItem)
++    {
++        if (_chipFilterPlanWindowOpen)
++            return;
++        _chipFilterPlanWindowOpen = true;
++        try
++        {
++            await ChipFilterPlanWindow.ShowForCurrentProjectAsync(TopLevel.GetTopLevel(this) as Window);
++        }
++        finally
++        {
++            _chipFilterPlanWindowOpen = false;
++            if (dragItem.EnableSetting)
++                dragItem.EnableSetting = false;
++        }
++    }
++
+ 
+     /// <summary>
+     /// 将设置选项内容添加到 Popup 中（竖屏模式使用）

@@ -1,0 +1,14 @@
+# LAA MFAAvalonia customization
+
+This directory keeps the reproducible UI patch used by LAA. It targets upstream
+MFAAvalonia commit `6065fe33798b72906c5079fa6f210646801d9a5c` (v2.15.2).
+
+The patch adds the in-process chip filter plan editor opened from the settings
+gear beside `ChipDetailReadTask`. Runtime plan data stays in
+`config/chip_filter_plan.json`; build output and NuGet caches stay outside the
+repository on the E drive.
+
+Run `build.ps1` after cloning the matching upstream source into
+`E:\LAA\MFAAvalonia-src`. The script applies the patch when needed, builds the
+UI, and copies only `MFAAvalonia.Core.dll` into the local `gui/libs` directory.
+
