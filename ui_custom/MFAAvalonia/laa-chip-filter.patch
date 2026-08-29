@@ -1,9 +1,9 @@
 diff --git a/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs b/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387b09ddcbf
+index 0000000000000000000000000000000000000000..1a1d6435da3f70b5539411a7adf6821f3ffe3951
 --- /dev/null
 +++ b/MFAAvalonia/Features/ChipFilter/ChipFilterPlan.cs
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,268 @@
 +using System;
 +using System.Collections.Generic;
 +using System.IO;
@@ -27,6 +27,57 @@ index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387
 +
 +    public static readonly string[] SubSkills =
 +    ["攻击", "耐久", "防御", "速度", "瞄准", "暴伤", "命中", "坚韧"];
++
++    public static readonly IReadOnlyDictionary<string, string[]> RecommendedSubSkills =
++        new Dictionary<string, string[]>
++        {
++            ["切割"] = ["攻击", "暴伤", "瞄准", "命中"],
++            ["协击"] = ["攻击", "暴伤", "瞄准"],
++            ["反击"] = ["攻击", "暴伤", "瞄准"],
++            ["致命"] = ["攻击", "暴伤", "瞄准"],
++            ["收割"] = ["攻击", "暴伤", "瞄准"],
++            ["灵巧"] = ["攻击", "暴伤", "瞄准"],
++            ["消除"] = ["攻击", "暴伤", "瞄准"],
++            ["神力"] = ["攻击", "暴伤", "瞄准"],
++            ["神威"] = ["攻击", "暴伤", "瞄准"],
++            ["穿甲"] = ["攻击", "瞄准", "暴伤"],
++            ["能量"] = ["攻击", "瞄准", "暴伤"],
++            ["物攻"] = ["攻击", "瞄准", "暴伤"],
++            ["乘风"] = ["攻击", "瞄准", "暴伤"],
++            ["连击"] = ["暴伤", "攻击", "瞄准"],
++            ["征服"] = ["暴伤", "攻击", "瞄准"],
++            ["扩大"] = ["暴伤", "攻击", "瞄准"],
++            ["痛击"] = ["暴伤", "攻击", "瞄准"],
++            ["腐蚀"] = ["攻击", "命中", "耐久"],
++            ["集中"] = ["命中", "攻击", "耐久"],
++            ["振奋"] = ["耐久", "防御", "坚韧"],
++            ["重伤"] = ["耐久", "防御", "坚韧"],
++            ["装填"] = ["速度", "耐久", "防御"],
++            ["引爆"] = ["速度", "耐久", "防御"],
++            ["精力"] = ["攻击", "瞄准", "暴伤"],
++            ["重击"] = ["速度", "攻击"],
++            ["屏障"] = ["耐久", "防御", "坚韧"],
++            ["支援"] = ["耐久", "防御", "坚韧"],
++            ["蓄能"] = ["耐久", "防御", "坚韧"],
++            ["暴怒"] = ["速度", "耐久", "防御"],
++            ["钝化"] = ["耐久", "防御", "坚韧"],
++            ["金刚"] = ["耐久", "防御", "坚韧"],
++            ["神速"] = ["耐久", "防御", "坚韧"],
++            ["铁壁"] = ["耐久", "防御", "坚韧"],
++            ["光幕"] = ["耐久", "防御", "坚韧"],
++            ["特防"] = ["耐久", "防御", "坚韧"]
++        };
++
++    public static Dictionary<string, ChipSubSkillRule> CreateRecommendedConditions() =>
++        MainSkills.ToDictionary(main => main, main => new ChipSubSkillRule
++        {
++            MinimumLevels = new Dictionary<int, List<string>>
++            {
++                [1] = [],
++                [2] = RecommendedSubSkills[main].ToList(),
++                [3] = []
++            }
++        });
 +}
 +
 +public static class ChipLockModes
@@ -47,7 +98,11 @@ index 0000000000000000000000000000000000000000..64231dc0d5596c6d83ecf9c606339387
 +        Levels = new Dictionary<int, ChipLevelRule>
 +        {
 +            [1] = new() { Mode = ChipLockModes.Unlock },
-+            [2] = new() { Mode = ChipLockModes.Conditional },
++            [2] = new()
++            {
++                Mode = ChipLockModes.Conditional,
++                Conditions = ChipFilterCatalog.CreateRecommendedConditions()
++            },
 +            [3] = new() { Mode = ChipLockModes.Lock }
 +        }
 +    };
