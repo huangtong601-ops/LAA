@@ -9,11 +9,13 @@ from maa.toolkit import Toolkit
 
 from arena_loop import ArenaLoop
 from base_order_flow import BaseOrderFlow
+from chip_filter_flow import ChipFilterFlow
 from startgame_flow import StartGameFlow
 from weekly_complete import WeeklyFlow
 
 AgentServer.custom_action("arena_loop")(ArenaLoop)
 AgentServer.custom_action("base_order_flow")(BaseOrderFlow)
+AgentServer.custom_action("chip_filter_flow")(ChipFilterFlow)
 AgentServer.custom_action("startgame")(StartGameFlow)
 AgentServer.custom_action("weekly_flow")(WeeklyFlow)
 

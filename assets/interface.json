@@ -42,7 +42,8 @@
         { "name": "活动·自动挑战下一关", "entry": "EventTask", "repeatable": true, "repeat_count": -1 },
         { "name": "基建·自动换班", "entry": "BaseShiftTask", "repeatable": true, "repeat_count": 1 },
         { "name": "基建·自动收菜", "entry": "BaseCollectTask", "repeatable": true, "repeat_count": 1 },
-        { "name": "基建-订单库", "entry": "BaseExchangeTask", "repeatable": false, "option": ["默认兑换构建票订单数额", "构建票订单数额6-10", "构建票订单数额16-18", "兑换稀有星币订单", "兑换稀有技术点订单"] }
+        { "name": "基建-订单库", "entry": "BaseExchangeTask", "repeatable": false, "option": ["默认兑换构建票订单数额", "构建票订单数额6-10", "构建票订单数额16-18", "兑换稀有星币订单", "兑换稀有技术点订单"] },
+        { "name": "芯片筛选·详细信息读取", "entry": "ChipDetailReadTask", "repeatable": false }
     ],
     "option": {
         "本周报酬全部领取后结束": {

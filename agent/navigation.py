@@ -27,7 +27,7 @@ MAIN_UI_CONTROLS = {
     "sortie": {"label": "出击", "point": (1708, 920), "node": "NavMainSortie"},
     "profile": {"label": "个人信息", "point": (300, 75), "node": None},
     "top_inbox": {"label": "顶部入口一", "point": (1530, 65), "node": None},
-    "top_inventory": {"label": "顶部入口二", "point": (1640, 65), "node": None},
+    "top_inventory": {"label": "仓库", "point": (1723, 63), "node": None},
     "top_menu": {"label": "顶部菜单", "point": (1750, 65), "node": None},
     "hide_ui": {"label": "隐藏界面", "point": (155, 840), "node": None},
     "chat": {"label": "聊天", "point": (250, 840), "node": None},
@@ -42,7 +42,7 @@ MAX_DIRECT_PAGE_STEPS = 2
 # Shared page graph used when one task hands control to another. New tasks must
 # extend this graph instead of assuming that every task starts from the home page.
 PAGE_GRAPH = {
-    "main": {"secondary", "base"},
+    "main": {"secondary", "base", "warehouse"},
     "secondary": {"main", "arena_hub", "activity_choice"},
     "arena_hub": {"secondary", "arena"},
     "arena": {"arena_hub"},
@@ -52,6 +52,8 @@ PAGE_GRAPH = {
     "battle_prep": {"boss_choice", "map"},
     "map": {"battle_prep"},
     "base": {"main", "base_staff", "base_order"},
+    "warehouse": {"main", "chip_inventory"},
+    "chip_inventory": {"warehouse"},
     "base_staff": {"base"},
     "base_order": {"base", "friend_list", "synthesis_catalog"},
     "friend_list": {"base_order"},

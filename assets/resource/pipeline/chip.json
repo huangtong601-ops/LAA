@@ -1,0 +1,28 @@
+{
+    "ChipDetailReadTask": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "chip_filter_flow"
+    },
+    "ChipPageText": {
+        "recognition": "OCR",
+        "roi": [0, 0, 1920, 1080],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "ChipSkillName": {
+        "recognition": "OCR",
+        "roi": [790, 308, 225, 56],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    },
+    "ChipSkillLevel": {
+        "recognition": "OCR",
+        "roi": [1038, 308, 130, 56],
+        "text": [],
+        "threshold": 0.2,
+        "action": "DoNothing"
+    }
+}
